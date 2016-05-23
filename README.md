@@ -3,7 +3,7 @@ Use http://../API/extension/context?caseId={{caseId}} or http://../API/extension
 
 See the tutorial for a step by step information
 
--------------------------------- Difference : --------------------------------
+==-------------------------------- Difference : --------------------------------
 
 The difference with the standard REST API to access variable and BDM are this one: 
  1/ Perimeter: using http://../API/bpm/activityVariable/[activity_id]/[variable_name] or http://../API/bpm/caseVariable/[caseId]/[variableName], you need to know where is the variable (process, activity)
@@ -15,7 +15,7 @@ The difference with the standard REST API to access variable and BDM are this on
  7/ no way to protect the header.CommentOfTheManagerEmployeeMustNotAccess in anyway
  8/ case is archive ? REST API to call are different ( ! ) . So, building an overview is 10 rest API ? You have to call 10 more REST API, different REST API, to get the result.
 
--------------------------------- Installation guide --------------------------------
+==-------------------------------- Installation guide --------------------------------
 
 Run the BonitaPortal, and connect as a Administrator. 
 1. Then, the profile Administrator should be accessible.
@@ -23,7 +23,7 @@ Run the BonitaPortal, and connect as a Administrator.
 3. Click on the button ADD, and give the file ContextAccess-x.y.zip"
 4. that's it : the RestContextExtention is installed and deployed
 
--------------------------------- first step --------------------------------
+==-------------------------------- first step --------------------------------
 
  When you use some processes variables (process, or local variable), use this REST Api to access all the variable in one call. All variables are delivered on a Json format (even HashMap and List, and Datatype) and you don't need to care if the variable is a process variable or a local variable.
 
