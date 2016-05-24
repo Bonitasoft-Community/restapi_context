@@ -12,10 +12,11 @@ import groovy.json.JsonSlurper;
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import org.apache.http.HttpHeaders
+
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 
-import org.apache.http.HttpHeaders
 
 
 import org.bonitasoft.engine.api.APIClient;
@@ -44,7 +45,7 @@ import com.bonitasoft.web.extension.rest.RestApiController
 
 class GetContext implements RestApiController {
 
-	private static final Logger logger = LoggerFactory.getLogger(GetContext.class)
+	private static final Logger logger = LoggerFactory.getLogger(GetContext.class);
 
 
 	private static final String cstActionCaseId = "caseId";
@@ -155,30 +156,48 @@ class GetContext implements RestApiController {
 
 			try
 			{
-				isLogFromParameter = Boolean.valueOf( request.getParameter("log"));
-				isLog = isLogFromParameter;
+				if (request.getParameter("log")!=null)
+				{
+					isLogFromParameter = Boolean.valueOf( request.getParameter("log"));
+					isLog = isLogFromParameter;
+				}
 			}
-			catch(Exception e) {}
+			catch(Exception e) {
+				logError( rootResult, "a Boolean is expected for the parameters log ["+request.getParameter("log")+"]" );
+			}
 			logRest( isLog,"=================== GetContext RESTAPI");
 			
 			//----------------- get the perimeter (taskid or processInstanceId)
 			try
 			{
-				contextCaseId.taskInstanceId = Long.valueOf( request.getParameter("taskId"));
-				ActivityInstance activityInstance = processAPI.getActivityInstance( contextCaseId.taskInstanceId);
-				contextCaseId.processInstanceId = activityInstance.getParentContainerId();
-			} catch(Exception e ) {};
+				if (request.getParameter("taskId")!=null)
+				{
+					contextCaseId.taskInstanceId = Long.valueOf( request.getParameter("taskId"));
+					ActivityInstance activityInstance = processAPI.getActivityInstance( contextCaseId.taskInstanceId);
+					contextCaseId.processInstanceId = activityInstance.getParentContainerId();
+				}
+			} catch(Exception e ) 
+			// no worry if an exception arrived here : that's mean the user doesn't give a taskId, error is manage after (no taskid+noCaseId=error)
+			{
+				sourceContextData+="Error with taskId["+request.getParameter("taskId")+"] : "+e.toString();
+			};
 
 			if (contextCaseId.processInstanceId == null) {
 				try
 				{
-					contextCaseId.processInstanceId = Long.valueOf( request.getParameter("caseId"));
-				} catch(Exception e ) {};
+					if (request.getParameter("caseId")!=null)
+						contextCaseId.processInstanceId = Long.valueOf( request.getParameter("caseId"));
+				} catch(Exception e ) 
+				// no worry if an exception arrived here : that's mean the user doesn't give a taskId, error is manage after (no taskid+noCaseId=error)
+				{
+					sourceContextData+="Error with caseId["+request.getParameter("caseId")+"] : "+e.toString();
+				
+				};
 			}
 
 			if (contextCaseId.processInstanceId == null)
 			{
-				logError( rootResult, "parameter [taskId] or [caseId] required");
+				logError( rootResult, "Parameter [taskId] or [caseId] required ("+sourceContextData+")");
 				return;
 			}
 
@@ -194,7 +213,9 @@ class GetContext implements RestApiController {
 			}
 			catch(Exception e)
 			{
+				// no worry if an exception arrived here : that's mean it's maybe an Archive InstanceId
 				// logRest( isLog, "No processinstance found by ["+ contextCaseId.processInstanceId+"] : "+e.toString() );
+				// sourceContextData+="Error getting Object processInstance and ActivityInstance from processId["+contextCaseId.processInstanceId+"] activityId["+contextCaseId.taskInstanceId+"] : "+e.toString();
 			}
 			// same with archived... yes, in Bonita, class are different...
 			try
@@ -206,6 +227,7 @@ class GetContext implements RestApiController {
 			}
 			catch(Exception e)
 			{
+				// no worry if an exception arrived here : that's mean it's maybe an InstanceId : so error will be managed after
 				// logRest( isLog, "No ArchivedProcessinstance found by ["+contextCaseId.processInstanceId+"] : "+e.toString() );
 			}
 			if (contextCaseId.processInstance == null && contextCaseId.archivedProcessInstance == null)
@@ -234,7 +256,9 @@ class GetContext implements RestApiController {
 					contextData = processAPI.getActivityDataInstance("context", contextCaseId.taskInstanceId);
 					contextDataSt = contextData.getValue();
 					sourceContextData+="ActivityDataInstance[context] value="+contextData.getValue();
-				} catch(DataNotFoundException dnte ) {}
+				} catch(DataNotFoundException dnte ) 
+				// Ok, no worry, let's try different options
+				{}
 			}
 			if (contextData == null && contextCaseId.processInstanceId !=null)
 			{
@@ -243,7 +267,9 @@ class GetContext implements RestApiController {
 					contextData = processAPI.getProcessDataInstance("globalcontext", contextCaseId.processInstanceId);
 					contextDataSt = contextData.getValue();
 					sourceContextData+="ProcessDataInstance[globalcontext] value="+contextData.getValue();
-				} catch(DataNotFoundException dnte ) {}
+				} catch(DataNotFoundException dnte ) 
+				// ok, maybe no context where given ?
+				{}
 			}
 			if (contextData == null && contextCaseId.archivedProcessInstance!=null)
 			{
@@ -252,8 +278,12 @@ class GetContext implements RestApiController {
 					contextData = processAPI.getArchivedProcessDataInstance("globalcontext", contextCaseId.archivedProcessInstance.getSourceObjectId());
 					contextDataSt = contextData.getValue();
 					sourceContextData+="ArchivedProcessDataInstance[globalcontext] value="+contextData.getValue();
-				} catch(ArchivedDataNotFoundException dnte ) {}
+				} catch(ArchivedDataNotFoundException dnte ) 
+				// still Ok, search after
+				{}
 			}
+			
+			// no data were given : create a default one
 			if (contextData == null)
 			{
 				contextDataSt = "{ \"*\" : \"all\",";
@@ -298,6 +328,7 @@ class GetContext implements RestApiController {
 						isLog = Boolean.valueOf( contextDataMap.get("RESTCONTEXTISLOG" ) );
 					}
 					catch( Exception e)
+					// Ok, if the value is not given or it's not a Boolean, no worry
 					{}
 				}
 
@@ -332,7 +363,6 @@ class GetContext implements RestApiController {
 					logRest(isLog, "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
 					for (BusinessDataReference bde : tempList)
 						listBusinessData.put( bde.getName(), bde );
-
 
 				}
 				if (contextCaseId.archivedProcessInstance!=null)
@@ -937,6 +967,6 @@ class GetContext implements RestApiController {
 			error+=";"+logExplanation;
 		else
 			error = logExplanation;
-		rootResult.put("error", logExplanation);
+		rootResult.put("error", error);
 	}
 }
