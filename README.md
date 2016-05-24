@@ -15,6 +15,11 @@ The difference with the standard REST API to access variable and BDM are this on
  7/ no way to protect the header.CommentOfTheManagerEmployeeMustNotAccess in anyway
  8/ case is archive ? REST API to call are different ( ! ) . So, building an overview is 10 rest API ? You have to call 10 more REST API, different REST API, to get the result.
 
+-------------------------------- People who can read this document --------------------------------
+
+All person using the UI Designer to create form.
+
+
 -------------------------------- Installation guide --------------------------------
 
 Run the BonitaPortal, and connect as a Administrator. 
