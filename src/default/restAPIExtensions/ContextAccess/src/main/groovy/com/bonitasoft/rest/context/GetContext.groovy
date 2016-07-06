@@ -43,6 +43,9 @@ import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
 import com.bonitasoft.web.extension.rest.RestAPIContext
 import com.bonitasoft.web.extension.rest.RestApiController
 
+import org.bonitasoft.web.extension.rest.RestApiController;
+import org.bonitasoft.web.extension.rest.RestAPIContext;
+ 
 class GetContext implements RestApiController {
 
 	private static final Logger logger = LoggerFactory.getLogger(GetContext.class);
@@ -819,9 +822,9 @@ class GetContext implements RestApiController {
 		{
 			try
 			{
-				// logger.info("loadBdmVariableOneLevel.10.a method["+method.getName()+"]");
+				logger.info("loadBdmVariableOneLevel.10.a method["+method.getName()+"]");
 
-				if (method.getName().startsWith("get") && method.getParameterTypes().length == 0
+				if ( (method.getName().startsWith("get") || method.getName().startsWith("is")) && method.getParameterTypes().length == 0
 				&& ! "getClass".equals(method.getName())
 				&& ! "getPersistenceVersion".equals(method.getName())
 				&& ! "getHandler".equals(method.getName()) )
@@ -833,8 +836,16 @@ class GetContext implements RestApiController {
 					// logger.info("loadBdmVariableOneLevel.10b method["+method.getName()+"] Result=["+value+"]");
 					String nameAttribute = method.getName();
 
-					nameAttribute= nameAttribute.substring(3); // getInvoice => Invoice
-					nameAttribute = nameAttribute.substring(0,1).toLowerCase()+nameAttribute.substring(1);
+					if (nameAttribute.startsWith("get"))
+					{
+						nameAttribute = nameAttribute.substring(3); // getInvoice => Invoice
+						nameAttribute = nameAttribute.substring(0,1).toLowerCase()+nameAttribute.substring(1);
+					}
+					else if (nameAttribute.startsWith("is"))
+					{
+						nameAttribute = nameAttribute.substring(2); // isInvoice => Invoice
+						nameAttribute = nameAttribute.substring(0,1).toLowerCase()+nameAttribute.substring(1);
+					}
 
 					// ok, the context pilot now
 					boolean keepIt=true;
