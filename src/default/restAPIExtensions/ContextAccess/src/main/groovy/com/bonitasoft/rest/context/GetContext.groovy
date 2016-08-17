@@ -40,8 +40,6 @@ import org.bonitasoft.web.extension.ResourceProvider
 import org.bonitasoft.web.extension.rest.RestApiResponse
 import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
 
-import com.bonitasoft.web.extension.rest.RestAPIContext
-import com.bonitasoft.web.extension.rest.RestApiController
 
 import org.bonitasoft.web.extension.rest.RestApiController;
 import org.bonitasoft.web.extension.rest.RestAPIContext;
@@ -340,6 +338,20 @@ class GetContext implements RestApiController {
 
 				Map<String,BusinessDataReference> listBusinessData= new HashMap<String,BusinessDataReference>();
 
+				if (contextCaseId.processInstanceId!=null)
+				{
+					logRest(isLog, "Collect BusinessData from: processinstanceid["+contextCaseId.processInstanceId+"]");
+					
+					List<BusinessDataReference> tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.processInstanceId, 0,1000);
+					if (tempList!=null)
+					{
+						logRest(isLog, "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
+						for (BusinessDataReference bde : tempList)
+							listBusinessData.put( bde.getName(), bde );
+	
+					}
+				}
+				// from the archivedProcessInstance now
 				if (contextCaseId.archivedProcessInstance!=null)
 				{
 					
@@ -358,18 +370,6 @@ class GetContext implements RestApiController {
 					logRest(isLog, "Collect BusinessData from: getArchivedProcessInstanceExecutionContext :archivedProcessInstance.getId() ["+listBusinessData.size()+"]");
 					// logger.info(">>> *END* ArchivedProcessInstanceExecutionContext<<");
 
-				}
-
-				List<BusinessDataReference> tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.processInstanceId, 0,1000);
-				if (tempList!=null)
-				{
-					logRest(isLog, "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
-					for (BusinessDataReference bde : tempList)
-						listBusinessData.put( bde.getName(), bde );
-
-				}
-				if (contextCaseId.archivedProcessInstance!=null)
-				{
 					tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
 					if (tempList!=null)
 					{
@@ -609,8 +609,8 @@ class GetContext implements RestApiController {
 			try
 			{
 				DataInstance dataInstance = processAPI.getProcessDataInstance(varName.toString(), contextCaseId.processInstance.getId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a PROCESSDATA : ["+dataInstance.getValue()+"]");
-				rootResult.put(dataInstance.getName(), transformValue( dataInstance.getValue(), varAction) );
+				logRest( isLog, "completeValue: Get variable["+varName+"] is a PROCESSDATA : ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
+				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction);
 				return;
 			} catch (DataNotFoundException dnte) {};
 
@@ -619,8 +619,8 @@ class GetContext implements RestApiController {
 			{
 				// logger.info("Try get localvariable["+varName+"]");
 				DataInstance dataInstance = processAPI.getActivityDataInstance(varName.toString(), contextCaseId.activityInstance.getId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataInstance.getValue()+"]");
-				rootResult.put(dataInstance.getName(), transformValue( dataInstance.getValue(), varAction ) );
+				logRest( isLog, "completeValue: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
+				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction );
 				return;
 			} catch (DataNotFoundException dnte) {};
 
@@ -629,9 +629,9 @@ class GetContext implements RestApiController {
 			{
 				logRest( isLog, "completeValue: search variable["+varName+"] in getArchivedProcessDataInstance");
 				ArchivedDataInstance archivedDataInstance = processAPI.getArchivedProcessDataInstance (varName.toString(), contextCaseId.archivedProcessInstance.getSourceObjectId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"]");
+				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-				rootResult.put(archivedDataInstance.getName(), transformValue( archivedDataInstance.getValue(), varAction) );
+				completeValueFromData( rootResult, archivedDataInstance.getName(), archivedDataInstance.getValue(), varAction );
 				return;
 			} catch (ArchivedDataNotFoundException dnte) {};
 
@@ -642,9 +642,9 @@ class GetContext implements RestApiController {
 			{
 				logRest( isLog, "completeValue: search variable["+varName+"] in getArchivedActivityDataInstance");
 				ArchivedDataInstance archivedDataInstance = processAPI. getArchivedActivityDataInstance( varName.toString(), contextCaseId.archivedActivityInstance.getSourceObjectId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"]");
+				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-				rootResult.put(archivedDataInstance.getName(), transformValue( archivedDataInstance.getValue(), varAction) );
+				completeValueFromData( rootResult, archivedDataInstance.getName(),archivedDataInstance.getValue(), varAction);
 				return;
 			} catch (ArchivedDataNotFoundException dnte) {};
 		}
@@ -654,7 +654,26 @@ class GetContext implements RestApiController {
 		return;
 	}
 
-
+	/**
+	 * save the value in the rootResult. If the value is a Obect 
+	 */
+	private void completeValueFromData( Map<String,Object> rootResult, String varName, Object varValue, String varAction )
+	{
+		rootResult.put(varName, transformValue( varValue, varAction) );
+		if (varValue instanceof Enum)
+		{
+			List<String> listOptions = new ArrayList<String>();
+			// get the enummeration
+			Object[] options = ((Enum) varValue).values();
+			for ( Object oneOption : options)
+			{
+				listOptions.add( oneOption.toString() );				
+			}
+			rootResult.put(varName+"_list", listOptions );
+		}
+		
+	}
+	
 	/* -------------------------------------------------------------------------------- */
 	/*																					*/
 	/*	completeValueBdmData															*/
@@ -689,22 +708,28 @@ class GetContext implements RestApiController {
 			if (businessData instanceof MultipleBusinessDataReference)
 			{
 				// this is a multiple data
-				resultBdm = new ArrayList<HashMap<String,Object>>();
+				
 				isMultiple=true;
 				logRest(isLog,"completeValueBdmData.3 Get MULTIPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
-				listStorageIds.addAll( ((MultipleBusinessDataReference) businessData).getStorageIds());
+				if (((MultipleBusinessDataReference) businessData).getStorageIds()==null)
+					listStorageIds.add( null ); // add a null value to have a result (bdm name + null) and geet the resultBdm as null 
+				else
+				{
+					resultBdm = new ArrayList<HashMap<String,Object>>();
+					listStorageIds.addAll( ((MultipleBusinessDataReference) businessData).getStorageIds());
+				}
 			}
 			if (businessData instanceof SimpleBusinessDataReference)
 			{
 				resultBdm = new HashMap<String,Object>();
 				isMultiple=false;
 				logRest(isLog,"completeValueBdmData.3: Get SIMPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
-				listStorageIds.addAll( ((SimpleBusinessDataReference) businessData).getStorageId());
+				// if null, add it even to have a result (bdm name + null)
+				listStorageIds.add( ((SimpleBusinessDataReference) businessData).getStorageId());
 			}
 			// logger.info("completeValueBdmData.3bis : Set ["+resultBdm+"] in result");
 
-			rootResult.put( businessData.getName(), resultBdm);
-
+		
 			String classDAOName = businessData.getType()+"DAO";
 			// logger.info("completeValueBdmData.4: Get Business Reference ["+businessData.getName()+"] it's a BDM-type["+businessData.getType()+"] classDao=["+classDAOName+"]");
 
@@ -716,27 +741,35 @@ class GetContext implements RestApiController {
 
 				return;
 			}
-			// logger.info("completeValueBdmData.5:classDao Loaded ["+classDao.getName()+"]");
+			//logger.info("completeValueBdmData.5:classDao Loaded ["+classDao.getName()+"]");
 
 
-			BusinessObjectDAO dao;
+			BusinessObjectDAO dao = apiClient.getDAO( classDao );
 
-			dao = apiClient.getDAO( classDao );
-
-			// logger.info("completeValueBdmData.6:Dao loaded : dao["+ dao +"]");
+			logger.info("completeValueBdmData.6:Dao loaded : dao["+ dao +"] listStorageIds["+listStorageIds+"]");
 
 			// now, check each BDM
 			for (Long storageId : listStorageIds)
 			{
+				
 				HashMap saveOneBdm = null;
 				if (isMultiple)
 				{
-					saveOneBdm = new HashMap<String,Object>();
+					saveOneBdm = storageId==null? null: new HashMap<String,Object>();
 					resultBdm.add( saveOneBdm );
 				}
 				else
+				{
 					saveOneBdm = resultBdm;
-
+					
+					if (storageId==null)
+						resultBdm=null; // in this situation, we want to have only one null at the end, and we know that the listStorageIds has only one item
+				}
+				
+				if (storageId==null)
+				{
+					continue;
+				}
 				// logger.info("completeValueBdmData.7: Get Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"] storageId["+storageId+"]");
 
 				Entity dataBdmEntity = dao.findByPersistenceId(storageId);
@@ -769,6 +802,12 @@ class GetContext implements RestApiController {
 
 
 			}
+			
+			// save the result now
+			logRest(isLog,"completeValueBdmData.6: Final result ["+businessData.getName()+"] : value["+resultBdm+"]");			
+			rootResult.put( businessData.getName(), resultBdm);
+			
+			
 			// def dao = context.apiClient.getDAO(MyDao.class)
 			// def data= dao.findByPersistenceId(ref.storageId)
 		} catch (Exception e) {
