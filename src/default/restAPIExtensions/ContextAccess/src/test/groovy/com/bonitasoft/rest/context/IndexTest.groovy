@@ -9,7 +9,7 @@ import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
 
 import spock.lang.Specification
 
-import com.bonitasoft.web.extension.rest.RestAPIContext
+import org.bonitasoft.web.extension.rest.RestAPIContext
 
 /**
  * @see http://spockframework.github.io/spock/docs/1.0/index.html

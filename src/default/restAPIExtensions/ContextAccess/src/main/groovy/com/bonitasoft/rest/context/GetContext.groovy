@@ -4,6 +4,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.text.Format;
 import java.text.SimpleDateFormat;
+import java.lang.reflect.Field;
 
 import groovy.json.JsonBuilder
 import groovy.json.JsonException;
@@ -11,13 +12,14 @@ import groovy.json.JsonSlurper;
 
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-
 import org.apache.http.HttpHeaders
 
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 
 
+
+import javax.swing.plaf.basic.BasicListUI.ListTransferHandler;
 
 import org.bonitasoft.engine.api.APIClient;
 import org.bonitasoft.engine.api.BusinessDataAPI;
@@ -100,7 +102,7 @@ class GetContext implements RestApiController {
 	/*	class PerformanceTrace															*/
 	/*																					*/
 	/* -------------------------------------------------------------------------------- */
-	private static class PerformanceTrace {
+	public static class PerformanceTrace {
 		private List<Map<String,Object>> listOperations = new ArrayList<Map<String,Object>>();
 		public void addMarker(String operation)
 		{
@@ -151,8 +153,8 @@ class GetContext implements RestApiController {
 		try
 		{
 			APIClient apiClient = context.apiClient;
-			ProcessAPI processAPI = context.apiClient.processAPI;
-			BusinessDataAPI businessDataAPI = context.apiClient.businessDataAPI;
+			ProcessAPI processAPI = apiClient.processAPI;
+			BusinessDataAPI businessDataAPI = apiClient.businessDataAPI;
 			ContextCaseId contextCaseId = new ContextCaseId();
 
 			try
@@ -320,8 +322,10 @@ class GetContext implements RestApiController {
 			}
 			else
 			{
+				
 				performanceTrace.addMarker("JsonParse");
 
+				
 				// decode the Log
 				if (isLogFromParameter==null) {
 					try
@@ -333,170 +337,9 @@ class GetContext implements RestApiController {
 					{}
 				}
 
-
-				// get the list of all Business Data
-
-				Map<String,BusinessDataReference> listBusinessData= new HashMap<String,BusinessDataReference>();
-
-				if (contextCaseId.processInstanceId!=null)
-				{
-					logRest(isLog, "Collect BusinessData from: processinstanceid["+contextCaseId.processInstanceId+"]");
-					
-					List<BusinessDataReference> tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.processInstanceId, 0,1000);
-					if (tempList!=null)
-					{
-						logRest(isLog, "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
-						for (BusinessDataReference bde : tempList)
-							listBusinessData.put( bde.getName(), bde );
-	
-					}
-				}
-				// from the archivedProcessInstance now
-				if (contextCaseId.archivedProcessInstance!=null)
-				{
-					
-					// logger.info(">>> *BEGIN* ArchivedProcessInstanceExecutionContext<<");
-					Map<String,Serializable> map = processAPI.getArchivedProcessInstanceExecutionContext(contextCaseId.archivedProcessInstance.getId());
-					for (String key : map.keySet() )
-					{
-						if (map.get( key ) instanceof BusinessDataReference)
-						{
-							// we got an archive Business Data Reference !
-							// logger.info(">>> Detect["+key+"] businessVariable");
-							BusinessDataReference bde = (BusinessDataReference) map.get( key ) ;
-							listBusinessData.put( bde.getName(), bde );
-						}
-					}
-					logRest(isLog, "Collect BusinessData from: getArchivedProcessInstanceExecutionContext :archivedProcessInstance.getId() ["+listBusinessData.size()+"]");
-					// logger.info(">>> *END* ArchivedProcessInstanceExecutionContext<<");
-
-					tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
-					if (tempList!=null)
-					{
-						logRest(isLog, "Collect BusinessData from: archivedActivityInstance.getSourceObjectId() ["+tempList.size()+"]");
-						for (BusinessDataReference bde : tempList)
-							listBusinessData.put( bde.getName(), bde );
-
-					}
-					tempList =context.apiClient.businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getId(), 0,1000);
-					if (tempList!=null)
-					{
-						logRest(isLog, "Collect BusinessData from: archivedActivityInstance.getId() ["+tempList.size()+"]");
-						for (BusinessDataReference bde : tempList)
-							listBusinessData.put( bde.getName(), bde );
-					}
-				}
-				performanceTrace.addMarker("collectListBusinessData");
-
-
-				// now, process the list
-				for (Object varName : contextDataMap.keySet())
-				{
-					String varAction = contextDataMap.get( varName ) !=null ? contextDataMap.get( varName ).toString() : null;
-					logRest(isLog, "Loop Get variable["+varName+"] / action["+varAction+"]");
-
-					if (varName.equals("*"))
-					{
-						Long instanceForBdm = null;
-						//------------ active part
-						if (contextCaseId.processInstance!=null)
-						{
-							instanceForBdm = contextCaseId.processInstance.getId();
-							List<DataInstance> listDataInstance = processAPI.getProcessDataInstances(contextCaseId.processInstance.getId(), 0,1000);
-							for (DataInstance data : listDataInstance)
-							{
-								completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
-							}
-							performanceTrace.addMarker("getAllProcessData");
-						}
-
-						if (contextCaseId.activityInstance!=null)
-						{
-							List<DataInstance> listDataInstance = processAPI.getActivityDataInstances(contextCaseId.activityInstance.getId(), 0,1000);
-							for (DataInstance data : listDataInstance)
-							{
-								completeValue(rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
-							}
-							performanceTrace.addMarker("getAllActivityData");
-
-						}
-						// ----- archived part
-						if (contextCaseId.archivedProcessInstance!=null)
-						{
-							instanceForBdm = contextCaseId.archivedProcessInstance.getId();
-							List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedProcessDataInstances(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
-							for (ArchivedDataInstance data : listDataInstance)
-							{
-								completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
-							}
-							performanceTrace.addMarker("getAllArchivedProcessData");
-
-						}
-						if (contextCaseId.archivedActivityInstance!=null)
-						{
-							List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedActivityDataInstances(contextCaseId.archivedActivityInstance.getSourceObjectId(), 0,1000);
-							for (ArchivedDataInstance data : listDataInstance)
-							{
-								completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
-							}
-							performanceTrace.addMarker("getAllArchivedActivityData");
-
-						}
-
-
-
-						// ---------------------- business Data
-						// logRest(isLog, "Search BDM with processInstanceId=["+contextCaseId.processInstanceId+"] instanceForBdm="+instanceForBdm);
-						//logRest(isLog, "contextCaseId.trace() =["+contextCaseId.trace()+"]");
-						// logRest(isLog, "archivedProcessInstance =["+contextCaseId.archivedProcessInstance+"]");
-
-						for (BusinessDataReference businessData : listBusinessData.values())
-						{
-							logRest(isLog, "Loop Get BDM["+businessData.getName()+"] / type["+businessData.getType()+"]");
-							completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextDataMap, isLog );
-						}
-						performanceTrace.addMarker("getBusinessData");
-
-
-					}
-					else if (cstActionCaseId.equals(varAction)) {
-						rootResult.put(varName, contextCaseId.processInstanceId);
-						// logRest(isLog,"cstActionCaseId :  new Result["+rootResult+"]");
-					}
-
-					else if (cstActionProcessDefinitionId.equals(varAction))
-						rootResult.put( varName, contextCaseId.getProcessDefinitionId());
-
-
-					else if (cstActionIsCaseArchived.equals(varAction))
-						rootResult.put( varName, contextCaseId.processInstance==null );
-
-					else if (cstActionTaskId.equals(varAction) && contextCaseId.taskInstanceId !=null)
-						rootResult.put( varName, contextCaseId.taskInstanceId);
-
-					else if (cstActionisTaskArchived.equals(varAction) && contextCaseId.taskInstanceId !=null)
-						rootResult.put( varName, contextCaseId.activityInstance == null);
-					else
-					{
-
-						// We want to load the data varName : is that a business Data ?
-						if (listBusinessData.containsKey( varName ))
-						{
-							completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, contextDataMap, isLog );
-							performanceTrace.addMarker("getBdmData["+varName+"]");
-						}
-						else
-						{
-							completeValue( rootResult, varName, varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
-							performanceTrace.addMarker("getData["+varName+"]");
-						}
-
-						listBusinessData
-
-
-					}
-
-				} // end of list
+				// get the content now
+				getContent( rootResult, isLog,  contextCaseId,  (Map<String,Object>) contextDataMap, performanceTrace, apiClient );
+				
 			}
 			performanceTrace.addMarker("getFinalResult");
 			if (isLog)
@@ -531,6 +374,189 @@ class GetContext implements RestApiController {
 		}
 	}
 
+	
+	
+	/**
+	 * get the content of the REST API
+	 * @param isLog
+	 * @param contextCaseId
+	 * @param context
+	 */
+	private void getContent( Map<String,Object> rootResult,
+			boolean isLog, 
+			ContextCaseId contextCaseId, 
+			Map<String,Object> contextDataMap,			
+			PerformanceTrace performanceTrace2,
+			APIClient apiClient) 
+	{
+		// get the list of all Business Data
+		ProcessAPI processAPI = apiClient.processAPI;
+		BusinessDataAPI businessDataAPI = apiClient.businessDataAPI;
+
+		Map<String,BusinessDataReference> listBusinessData= new HashMap<String,BusinessDataReference>();
+		
+		
+		if (contextCaseId.processInstanceId!=null)
+		{
+			logRest(isLog, "Collect BusinessData from: processinstanceid["+contextCaseId.processInstanceId+"]");
+			
+			List<BusinessDataReference>  tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.processInstanceId, 0,1000);
+			if (tempList!=null)
+			{
+				logRest(isLog, "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
+				for (BusinessDataReference bde : tempList)
+					listBusinessData.put( bde.getName(), bde );
+
+			}
+		}
+		// from the archivedProcessInstance now
+		if (contextCaseId.archivedProcessInstance!=null)
+		{
+			
+			// logger.info(">>> *BEGIN* ArchivedProcessInstanceExecutionContext<<");
+			Map<String,Serializable> map = processAPI.getArchivedProcessInstanceExecutionContext(contextCaseId.archivedProcessInstance.getId());
+			for (String key : map.keySet() )
+			{
+				if (map.get( key ) instanceof BusinessDataReference)
+				{
+					// we got an archive Business Data Reference !
+					// logger.info(">>> Detect["+key+"] businessVariable");
+					BusinessDataReference bde = (BusinessDataReference) map.get( key ) ;
+					listBusinessData.put( bde.getName(), bde );
+				}
+			}
+			logRest(isLog, "Collect BusinessData from: getArchivedProcessInstanceExecutionContext :archivedProcessInstance.getId() ["+listBusinessData.size()+"]");
+			// logger.info(">>> *END* ArchivedProcessInstanceExecutionContext<<");
+
+			List<BusinessDataReference>  tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
+			if (tempList!=null)
+			{
+				logRest(isLog, "Collect BusinessData from: archivedActivityInstance.getSourceObjectId() ["+tempList.size()+"]");
+				for (BusinessDataReference bde : tempList)
+					listBusinessData.put( bde.getName(), bde );
+
+			}
+			tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getId(), 0,1000);
+			if (tempList!=null)
+			{
+				logRest(isLog, "Collect BusinessData from: archivedActivityInstance.getId() ["+tempList.size()+"]");
+				for (BusinessDataReference bde : tempList)
+					listBusinessData.put( bde.getName(), bde );
+			}
+		}
+		performanceTrace2.addMarker("collectListBusinessData");
+
+
+		// now, process the list
+		for (Object varName : contextDataMap.keySet())
+		{
+			String varAction = contextDataMap.get( varName ) !=null ? contextDataMap.get( varName ).toString() : null;
+			logRest(isLog, "Loop Get variable["+varName+"] / action["+varAction+"]");
+
+			if (varName.equals("*"))
+			{
+				Long instanceForBdm = null;
+				//------------ active part
+				if (contextCaseId.processInstance!=null)
+				{
+					instanceForBdm = contextCaseId.processInstance.getId();
+					List<DataInstance> listDataInstance = processAPI.getProcessDataInstances(contextCaseId.processInstance.getId(), 0,1000);
+					for (DataInstance data : listDataInstance)
+					{
+						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					}
+					performanceTrace2.addMarker("getAllProcessData");
+				}
+
+				if (contextCaseId.activityInstance!=null)
+				{
+					List<DataInstance> listDataInstance = processAPI.getActivityDataInstances(contextCaseId.activityInstance.getId(), 0,1000);
+					for (DataInstance data : listDataInstance)
+					{
+						completeValue(rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					}
+					performanceTrace2.addMarker("getAllActivityData");
+
+				}
+				// ----- archived part
+				if (contextCaseId.archivedProcessInstance!=null)
+				{
+					instanceForBdm = contextCaseId.archivedProcessInstance.getId();
+					List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedProcessDataInstances(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
+					for (ArchivedDataInstance data : listDataInstance)
+					{
+						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					}
+					performanceTrace2.addMarker("getAllArchivedProcessData");
+
+				}
+				if (contextCaseId.archivedActivityInstance!=null)
+				{
+					List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedActivityDataInstances(contextCaseId.archivedActivityInstance.getSourceObjectId(), 0,1000);
+					for (ArchivedDataInstance data : listDataInstance)
+					{
+						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					}
+					performanceTrace2.addMarker("getAllArchivedActivityData");
+
+				}
+
+
+
+				// ---------------------- business Data
+				// logRest(isLog, "Search BDM with processInstanceId=["+contextCaseId.processInstanceId+"] instanceForBdm="+instanceForBdm);
+				//logRest(isLog, "contextCaseId.trace() =["+contextCaseId.trace()+"]");
+				// logRest(isLog, "archivedProcessInstance =["+contextCaseId.archivedProcessInstance+"]");
+
+				for (BusinessDataReference businessData : listBusinessData.values())
+				{
+					logRest(isLog, "Loop Get BDM["+businessData.getName()+"] / type["+businessData.getType()+"]");
+					completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextDataMap, isLog );
+				}
+				performanceTrace2.addMarker("getBusinessData");
+
+
+			}
+			else if (cstActionCaseId.equals(varAction)) {
+				rootResult.put(varName, contextCaseId.processInstanceId);
+				// logRest(isLog,"cstActionCaseId :  new Result["+rootResult+"]");
+			}
+
+			else if (cstActionProcessDefinitionId.equals(varAction))
+				rootResult.put( varName, contextCaseId.getProcessDefinitionId());
+
+
+			else if (cstActionIsCaseArchived.equals(varAction))
+				rootResult.put( varName, contextCaseId.processInstance==null );
+
+			else if (cstActionTaskId.equals(varAction) && contextCaseId.taskInstanceId !=null)
+				rootResult.put( varName, contextCaseId.taskInstanceId);
+
+			else if (cstActionisTaskArchived.equals(varAction) && contextCaseId.taskInstanceId !=null)
+				rootResult.put( varName, contextCaseId.activityInstance == null);
+			else
+			{
+
+				// We want to load the data varName : is that a business Data ?
+				if (listBusinessData.containsKey( varName ))
+				{
+					completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, contextDataMap, isLog );
+					performanceTrace2.addMarker("getBdmData["+varName+"]");
+				}
+				else
+				{
+					completeValue( rootResult, varName, varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					performanceTrace2.addMarker("getData["+varName+"]");
+				}
+
+				
+
+
+			}
+
+		} // end of list
+	}
+	
 	/* -------------------------------------------------------------------------------- */
 	/*																					*/
 	/*	buildResponse																	*/
@@ -746,7 +772,7 @@ class GetContext implements RestApiController {
 
 			BusinessObjectDAO dao = apiClient.getDAO( classDao );
 
-			logger.info("completeValueBdmData.6:Dao loaded : dao["+ dao +"] listStorageIds["+listStorageIds+"]");
+			// logger.info("completeValueBdmData.6:Dao loaded : dao["+ dao +"] listStorageIds["+listStorageIds+"]");
 
 			// now, check each BDM
 			for (Long storageId : listStorageIds)
@@ -782,7 +808,7 @@ class GetContext implements RestApiController {
 
 
 				Class classBdmEntity= dataBdmEntity.getClass();
-				// logger.info("completeValueBdmData.9: got the class["+classBdmEntity.getName()+"]");
+				logger.info("completeValueBdmData.9: got the class["+classBdmEntity.getName()+"]");
 
 				// Start the recursive
 				// example: variable is summerOrder : {}
@@ -854,14 +880,51 @@ class GetContext implements RestApiController {
 		Class classBdmEntity= dataBdmEntity.getClass();
 		// logger.info("loadBdmVariableOneLevel.10a ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] contextLocalLevel["+contextLocalLevel.toString()+"]");
 
-		Method[] listMethods= classBdmEntity.getMethods();
+		
+		Map<String,String> privateFields = new HashMap<String,String>();
+		Field[] declaredFields = dataBdmEntity.getClass().getDeclaredFields();
+		Field[] fields         = dataBdmEntity.getClass().getFields();
+		Method[] listMethods   = classBdmEntity.getMethods();
+		Class[] listClasses    = classBdmEntity.getClasses();
+		//logger.info("loadBdmVariableOneLevel.10a ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] declaredFields["+declaredFields.length+"] fields["+fields.length+"] Classes["+listClasses.length);
+
+		for (Class onClass : listClasses) {
+			//logger.info("loadBdmVariableOneLevel.10b ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] class["+onClass.getName()+"]");
+		}
+		
+		for (Field field : declaredFields) {
+			final Class<?> fieldType = field.getType();
+			//logger.info("loadBdmVariableOneLevel.10b ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] declaredFields.fieldName["+field.getName()+"] fieldType["+fieldType.toString());
+			
+			
+			/* if (shouldSkipField(fieldType)) {
+				          continue;
+			}
+			*/
+				
+			privateFields.put( field.getName().toLowerCase(), field.getName());
+		}
+		for (Field field : fields) {
+			final Class<?> fieldType = field.getType();
+			//logger.info("loadBdmVariableOneLevel.10b ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] fields.fieldName["+field.getName()+"] fieldType["+fieldType.toString());
+			
+			
+			/* if (shouldSkipField(fieldType)) {
+						  continue;
+			}
+			*/
+				
+			privateFields.put( field.getName().toLowerCase(), field.getName());
+		}
+			
+			
 
 		//	logger.info("Field= "+listFields+" Methods="+listMethods);
 		for (Method method : listMethods)
 		{
 			try
 			{
-				logger.info("loadBdmVariableOneLevel.10.a method["+method.getName()+"]");
+				// logger.info("loadBdmVariableOneLevel.10.c method["+method.getName()+"]");
 
 				if ( (method.getName().startsWith("get") || method.getName().startsWith("is")) && method.getParameterTypes().length == 0
 				&& ! "getClass".equals(method.getName())
@@ -886,8 +949,14 @@ class GetContext implements RestApiController {
 						nameAttribute = nameAttribute.substring(0,1).toLowerCase()+nameAttribute.substring(1);
 					}
 
-					// ok, the context pilot now
+					// search the Realname
 					boolean keepIt=true;
+					// logger.info("loadBdmVariableOneLevel.10d method["+method.getName()+"] nameAttribut["+nameAttribute	+"] RealName["+privateFields.get(nameAttribute.toLowerCase())+"] Result=["+value+"] keepIt="+keepIt+" Entity ? "+(value!=null && value instanceof Entity)+" classValue=["+(value !=null ? value.getClass().getName() : "null")+"]");
+				
+					if (privateFields.get(nameAttribute.toLowerCase())!=null)
+						nameAttribute = privateFields.get(nameAttribute.toLowerCase());
+					
+					// ok, the context pilot now
 					if (contextLocalLevel!=null)
 					{
 						Object contextInfo = contextLocalLevel.get(nameAttribute);
@@ -961,7 +1030,10 @@ class GetContext implements RestApiController {
 
 	}
 
-
+	protected boolean shouldSkipField(Class<?> fieldType) {
+		return fieldType.equals(javassist.util.proxy.MethodHandler.MethodHandler.class);
+	}
+		
 	/* -------------------------------------------------------------------------------- */
 	/*																					*/
 	/*	transformValue																	*/
@@ -978,13 +1050,26 @@ class GetContext implements RestApiController {
 	{
 		if (data==null)
 			return null;
+		// logger.info("TransformData["+data+"] varAction["+varAction+"]")
 		if (data instanceof Date)
 		{
 			if ("date".equals(varAction))
 				return sdfDate.format( (Date) data);
 			else if ("datetime".equals(varAction))
 				return sdfDateTime.format( (Date) data);
-			return sdfDateTime.format( (Date) data);
+			else if ("datelong".equals(varAction))
+				return ((Date) data).getTime();
+			return ((Date) data).getTime();
+		}
+		if (data instanceof List)
+		{
+			List<Object> listTransformed= new ArrayList<Object>();
+			for (Object onItem : ((List) data))
+			{
+				// propagate the varAction to transform the date
+				listTransformed.add( transformValue( onItem, varAction ));
+			}
+			return listTransformed;
 		}
 		return data;
 	}
