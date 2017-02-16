@@ -325,3 +325,73 @@ the taskId is under "id" : is this URL, taskId is 100003. To get the caseId, on 
    BY THE UIDESIGNER
 	click on the different task, and then the REST API is called and get the information. Access the task definition with the UIDesigner to see how to use it.
   
+----------- List of update
+
+ 2.0 Access :
+			•BDM variables
+			•when the case is archived, access data
+			•thanks to Kilian, modify the Date format output
+
+ 2.1 Remove the BDM dependency in POM.XML
+
+ 2.2 This version works in a BonitaCommunity / Fix the boolean field in a BDM
+
+ 2.3 An Java numerate is handle and the list of value is returned When a BDM is null, Rest Context handle it and return the value with a null.
+		Only limit : if you have a List of BDM and in the list, a null :
+		List[ 0 ] = ClientDAO.newInstance()
+		List[ 1 ] = null
+		List[ 2 ] = ClientDAO.newInstance()
+		List[ 3 ] = ClientDAO.newInstance()
+		In this situation, the engine return an exception (when RestAPIContext ask the list of BDM) and this situation is not handle by the RestAPI Context
+
+ 2.4 manage dates as timestamp to manage the TimeZone for the DatePicker
+		Correct a bug on "Templist"
+
+ 2.5 New parameters the dateformat parameters : 
+ 		dateformat=DATEJSON to return a date in JSON (to be usefull with the Widget DateTime),
+ 		dateformat=DATETIME return a JSON date + time
+      dateformat=DATELONG return a the date as a long (TimeStamp) to be compatible with the widget DatePicker[UIDesigner]. This is the default value  
+ return document
+ add context in the result (context group caseid, taskid, userid, username, isAdministrator, processdefinitionid,isProcessInstanciation)
+
+
+ 2.6 Accept url parameter
+      return context.isTask / context.isOverview based on the URL parameter value
+      in case of instantiation, return the document variable empty (if context ask for anyvalue like '*').
+      return parameters (+ value) in the result
+      
+      
+ return context.isTask / context.isOverview based on the URL parameter value
+ in case of instantiation, return the document variable empty (if context ask for anyvalue like '*').
+ return parameters (+ value) in the result
+--------------------------------- Url Parameter
+To set the URL in the RestAPi Context, do the following:
+- Create a Javascript variable "getUrl"
+- give the Javascript : 
+        var urlPath = window.location.pathname;
+        var urlPathEncode = encodeURI(urlPath);
+        return urlPathEncode;
+
+- in the RESTAPI CONTEXT, give this information:
+   ../API/extension/context?taskId={{taskId}}&processId={{taskId}}&caseId={{taskId}}&url={{getUrl}}
+
+ (assuming taskId is a variable "URL parameter" / value= "id"
+ Nota : BonitaPortal give in the URL parameter ID different ID : this is the TASK ID of the task on the task execution, the caseId in the overviewcase, and the processId in the process instantiation
+ The result is then
+ "context": {
+        "isTaskExecution": false,
+        "isProcessInstanciation": true,
+        "isProcessOverview": false,
+        "isAdministrator": true,
+ 
+ ------------------------------ Document
+ In the instantiation form, when a document exist, return it empty. This information is needed for the FileUploadWidgetPlus
+ 
+ ------------------------------ Parameters
+ If requested (context required all like '*') then the process parameters are returned with the value.
+ Else, return can be done only when requested
+
+ 
+    DateTime is now new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ")
+
+

@@ -19,33 +19,58 @@ import javax.servlet.http.HttpServletResponse
 
 
 
-import javax.swing.plaf.basic.BasicListUI.ListTransferHandler;
+
+
+
+
+
+
+
+
 
 import org.bonitasoft.engine.api.APIClient;
 import org.bonitasoft.engine.api.BusinessDataAPI;
+import org.bonitasoft.engine.api.IdentityAPI;
 import org.bonitasoft.engine.api.ProcessAPI;
+import org.bonitasoft.engine.api.ProfileAPI;
 import org.bonitasoft.engine.bpm.data.ArchivedDataInstance;
 import org.bonitasoft.engine.bpm.data.ArchivedDataNotFoundException;
 import org.bonitasoft.engine.bpm.data.DataInstance;
 import org.bonitasoft.engine.bpm.data.DataNotFoundException;
+import org.bonitasoft.engine.bpm.document.Document;
+import org.bonitasoft.engine.bpm.document.DocumentCriterion;
+import org.bonitasoft.engine.bpm.document.DocumentDefinition;
+import org.bonitasoft.engine.bpm.document.DocumentListDefinition;
+import org.bonitasoft.engine.bpm.document.DocumentsSearchDescriptor;
 import org.bonitasoft.engine.bpm.flownode.ActivityInstance;
 import org.bonitasoft.engine.bpm.flownode.ArchivedActivityInstance;
+import org.bonitasoft.engine.bpm.flownode.FlowElementContainerDefinition;
+import org.bonitasoft.engine.bpm.parameter.ParameterCriterion;
+import org.bonitasoft.engine.bpm.parameter.ParameterInstance;
 import org.bonitasoft.engine.bpm.process.ArchivedProcessInstance;
+import org.bonitasoft.engine.bpm.process.DesignProcessDefinition;
 import org.bonitasoft.engine.bpm.process.ProcessInstance;
 import org.bonitasoft.engine.bdm.Entity;
 import org.bonitasoft.engine.bdm.dao.BusinessObjectDAO;
 import org.bonitasoft.engine.business.data.BusinessDataReference;
 import org.bonitasoft.engine.business.data.MultipleBusinessDataReference;
 import org.bonitasoft.engine.business.data.SimpleBusinessDataReference;
+import org.bonitasoft.engine.identity.User;
+import org.bonitasoft.engine.search.SearchOptionsBuilder;
+import org.bonitasoft.engine.search.SearchResult;
 import org.bonitasoft.engine.session.APISession;
 import org.bonitasoft.web.extension.ResourceProvider
 import org.bonitasoft.web.extension.rest.RestApiResponse
 import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
-
-
+import org.bonitasoft.engine.profile.Profile;
 import org.bonitasoft.web.extension.rest.RestApiController;
 import org.bonitasoft.web.extension.rest.RestAPIContext;
  
+
+/**
+* See page.properties for list of version
+
+ */
 class GetContext implements RestApiController {
 
 	private static final Logger logger = LoggerFactory.getLogger(GetContext.class);
@@ -58,6 +83,10 @@ class GetContext implements RestApiController {
 	private static final String cstActionisTaskArchived = "isTaskArchived";
 
 
+	/**
+	 * it's one of this possibility
+	 */
+	public enum enuTypeUrl { PROCESSINSTANCIATION, CASEOVERVIEW, TASKEXECUTION, UNKNOW };
 
 	/* -------------------------------------------------------------------------------- */
 	/*																					*/
@@ -68,19 +97,21 @@ class GetContext implements RestApiController {
 	private static class ContextCaseId {
 		Long taskInstanceId = null;
 		Long processInstanceId = null;
-
+		Long processDefinitionId = null;
+		 
 		ProcessInstance processInstance=null;
 		ActivityInstance activityInstance = null;
 		ArchivedProcessInstance archivedProcessInstance = null;
 		ArchivedActivityInstance archivedActivityInstance=null;
 
+			
 		public Long getProcessDefinitionId()
 		{
 			if ( processInstance!=null)
 				return processInstance.getProcessDefinitionId();
 			if (archivedProcessInstance!=null)
 				return archivedProcessInstance.getProcessDefinitionId();
-			return null;
+			return processDefinitionId;			
 		}
 
 		public String trace()
@@ -90,7 +121,44 @@ class GetContext implements RestApiController {
 			trace += (archivedProcessInstance!=null ? "ProcessInstance[Archived-"+archivedProcessInstance.getId()+"/"+archivedProcessInstance.getSourceObjectId() +"],":"")
 			trace += (activityInstance!=null ? "ActivityInstance[Active-"+activityInstance.getId()+"],":"")
 			trace += (archivedActivityInstance!=null ? "ActivityInstance[Archived-"+archivedActivityInstance.getId()+"],":"");
+			trace +=  "processDefinitionId["+processDefinitionId+"],";
 			return trace;
+		}
+		
+		/**
+		 * context Data to control what we send back to the result
+		 */
+		Map<String,Object> contextData;
+		boolean isAllowAllVariables=false;
+		public void setContextData( Map<String,Object> ctx)
+		{
+			contextData = ctx;
+			isAllowAllVariables=false;
+			for (Object varNameIt : contextData.keySet())
+			{
+				if ("*".equals(varNameIt))
+				{
+					isAllowAllVariables=true;
+				}
+			}
+		}
+		
+		public Map<String,Object>  getContextData()
+		{
+			return contextData;
+		}
+		
+		public boolean isAllowVariableName(String varName )
+		{
+			if (isAllowAllVariables)
+				return true;
+			for (Object varNameIt : contextData.keySet())
+			{
+				if (varNameIt.equals(varName))
+					return true;
+			}
+			return false;			
+				
 		}
 
 	}
@@ -144,19 +212,75 @@ class GetContext implements RestApiController {
 		// Here is an example of how you can retrieve configuration parameters from a properties file
 		// It is safe to remove this if no configuration is required
 		Map<String,Object> rootResult = new HashMap<String,Object>();
+		Map<String,Object> contextResult= new HashMap<String,Object>();
+		
 		DataInstance contextData=null;
 		String sourceContextData="";
 		String contextDataSt = null;
 		boolean isLog=false;
 		Boolean isLogFromParameter=null;
-
+		
+		def detectTypeUrl = enuTypeUrl.UNKNOW;
+		
 		try
 		{
 			APIClient apiClient = context.apiClient;
+			APISession apiSession = context.getApiSession();
 			ProcessAPI processAPI = apiClient.processAPI;
+			IdentityAPI identityAPI = apiClient.identityAPI;
+			ProfileAPI profileAPI = apiClient.profileAPI;
 			BusinessDataAPI businessDataAPI = apiClient.businessDataAPI;
 			ContextCaseId contextCaseId = new ContextCaseId();
 
+			// the URL can be call in the UI Designe with 
+			// ../API/extension/context?taskId={{taskId}}&processId={{processId}}
+			// because the same form may be used in a PROCESS INSTANCTIATION or in a TASK.
+			// Pb : in the URL, there are only a ID which contains the processDefinitionId (form Instantiation) or taskId (task)
+			// So, how can we detect we are in fact in a PROCESS INSTANCIATION or in a TASK ? 
+			// the complete URL is in fact  
+			// http://localhost:8080/bonita/portal/resource/process/Aegrotat/1.22/API/extension/context?taskId=8994946062106177132&processId=89949460621
+			// http://localhost:8080/bonita/portal/resource/taskInstance/Aegrotat/1.22/Review%20Medical/API/extension/context?taskId=66313&processId=66313
+			// so we add a new control based on the URL.
+		
+			String url = request.getParameter("url");
+			
+			if (url !=null)
+			{
+				// /bonita/portal/resource/process/ExpenseNote/1.0/content/==> Create
+				// /bonita/portal/resource/processInstance/ExpenseNote/1.0/content/==> Overview
+				// /bonita/portal/resource/taskInstance/ExpenseNote/1.0/Modify/content/  ==> Modify
+				if (url.indexOf("resource/process/")!=-1)
+					detectTypeUrl= enuTypeUrl.PROCESSINSTANCIATION;
+				else if (url.indexOf("resource/processInstance/")!=-1)
+					detectTypeUrl= enuTypeUrl.CASEOVERVIEW;
+				else if (url.indexOf("resource/taskInstance/")!=-1)
+					detectTypeUrl= enuTypeUrl.TASKEXECUTION;
+
+				logger.info(" URL ["+url+"] isProcessInstanciation="+(detectTypeUrl == enuTypeUrl.PROCESSINSTANCIATION)+", isProcessOverview="+(detectTypeUrl == enuTypeUrl.CASEOVERVIEW)+", isTaskExecution="+(detectTypeUrl == enuTypeUrl.TASKEXECUTION));
+			}
+			
+			
+			//----------------------------  decode each parameters
+			try
+			{
+				// attention, if we suppose this is a FormInstantiation task, we don't try to get the taskId
+				if (request.getParameter("taskId")!=null &&  detectTypeUrl != enuTypeUrl.PROCESSINSTANCIATION)
+					contextCaseId.taskInstanceId = Long.valueOf( request.getParameter("taskId"));
+			} catch(Exception e )
+			{
+				sourceContextData+="Error with taskId["+request.getParameter("taskId")+"] : "+e.toString();
+			};
+			
+			try
+			{
+				if (request.getParameter("processId")!=null)
+					contextCaseId.processDefinitionId = Long.valueOf( request.getParameter("processId"));
+			} catch(Exception e )
+			{
+				sourceContextData+="Error with processId["+request.getParameter("processId")+"] : "+e.toString();			
+			};
+			
+			
 			try
 			{
 				if (request.getParameter("log")!=null)
@@ -168,27 +292,40 @@ class GetContext implements RestApiController {
 			catch(Exception e) {
 				logError( rootResult, "a Boolean is expected for the parameters log ["+request.getParameter("log")+"]" );
 			}
+			
+			// let's go
 			logRest( isLog,"=================== GetContext RESTAPI");
 			
-			//----------------- get the perimeter (taskid or processInstanceId)
+			//----------------- get the perimeter (taskid or processInstanceId or ProcessId)
 			try
 			{
-				if (request.getParameter("taskId")!=null)
+				if (contextCaseId.taskInstanceId!=null)
 				{
-					contextCaseId.taskInstanceId = Long.valueOf( request.getParameter("taskId"));
 					ActivityInstance activityInstance = processAPI.getActivityInstance( contextCaseId.taskInstanceId);
 					contextCaseId.processInstanceId = activityInstance.getParentContainerId();
 				}
 			} catch(Exception e ) 
-			// no worry if an exception arrived here : that's mean the user doesn't give a taskId, error is manage after (no taskid+noCaseId=error)
 			{
-				sourceContextData+="Error with taskId["+request.getParameter("taskId")+"] : "+e.toString();
+				logger.info(" taskInstanceId=["+contextCaseId.taskInstanceId+"] Exception ["+e.toString()+"]");
+				
+				// Actually, if the user give a ProcessId that's mean that we are in the task instantiation. Because with the UI Designer, there are no way 
+				// to give a taskId=xxx&processId=xxx : the only parameter in the url is "id" !
+				if (contextCaseId.processDefinitionId !=null)
+				{
+					contextCaseId.taskInstanceId=null;
+					contextCaseId.processInstanceId=null;
+				}
+				else
+					sourceContextData+="Error with taskId["+request.getParameter("taskId")+"] : "+e.toString();
 			};
+		
 
+			
+            // may be updated by the taskId		
 			if (contextCaseId.processInstanceId == null) {
 				try
 				{
-					if (request.getParameter("caseId")!=null)
+					if (request.getParameter("caseId")!=null && detectTypeUrl != enuTypeUrl.PROCESSINSTANCIATION)
 						contextCaseId.processInstanceId = Long.valueOf( request.getParameter("caseId"));
 				} catch(Exception e ) 
 				// no worry if an exception arrived here : that's mean the user doesn't give a taskId, error is manage after (no taskid+noCaseId=error)
@@ -197,14 +334,36 @@ class GetContext implements RestApiController {
 				
 				};
 			}
-
-			if (contextCaseId.processInstanceId == null)
+			
+			
+			if (contextCaseId.processInstanceId == null && contextCaseId.processDefinitionId==null)
 			{
-				logError( rootResult, "Parameter [taskId] or [caseId] required ("+sourceContextData+")");
+				logError( rootResult, "Parameter [taskId] or [caseId] or [processId] required ("+sourceContextData+")");
 				return;
 			}
 
 
+			String defaultDateFormat= request.getParameter("dateformat");
+			if ("DATELONG".equalsIgnoreCase(defaultDateFormat))
+			{
+				defaultDateFormat= DateFormat.DATELONG;
+				sourceContextData+="DateFormat[DATELONG];";
+			}
+			if ("DATETIME".equalsIgnoreCase(defaultDateFormat))
+			{
+				defaultDateFormat= DateFormat.DATETIME;
+				sourceContextData+="DateFormat[DATETIME];";
+			}
+			if ("DATEJSON".equalsIgnoreCase(defaultDateFormat))
+			{
+				defaultDateFormat= DateFormat.DATEJSON;
+				sourceContextData+="DateFormat[DATEJSON];";
+			}
+			String version = request.getParameter("version");
+			if (version!=null)
+				contextResult.put("version", "2.5");
+				
+			
 			// ------------------ retrieve correct information
 			// if the processinstance exist ? The task Id ?
 
@@ -225,7 +384,7 @@ class GetContext implements RestApiController {
 			{
 				if (contextCaseId.processInstance ==null)
 					contextCaseId.archivedProcessInstance = processAPI.getFinalArchivedProcessInstance( contextCaseId.processInstanceId );
-				if (contextCaseId.taskInstanceId !=null && contextCaseId.taskInstanceId == null)
+				if (contextCaseId.taskInstanceId !=null && contextCaseId.activityInstance == null)
 					contextCaseId.archivedActivityInstance = processAPI.getArchivedActivityInstance( contextCaseId.taskInstanceId );
 			}
 			catch(Exception e)
@@ -233,16 +392,16 @@ class GetContext implements RestApiController {
 				// no worry if an exception arrived here : that's mean it's maybe an InstanceId : so error will be managed after
 				// logRest( isLog, "No ArchivedProcessinstance found by ["+contextCaseId.processInstanceId+"] : "+e.toString() );
 			}
-			if (contextCaseId.processInstance == null && contextCaseId.archivedProcessInstance == null)
+			if (contextCaseId.processInstance == null && contextCaseId.archivedProcessInstance == null && contextCaseId.processDefinitionId==null)
 			{
-				rootResult.put("caseId", contextCaseId.processInstanceId);
+				contextResult.put("caseId", contextCaseId.processInstanceId);
 				logError(rootResult, "caseId unknown");
 				return;
 			}
 			if (contextCaseId.taskInstanceId != null && contextCaseId.activityInstance==null && contextCaseId.archivedActivityInstance==null)
 			{
-				rootResult.put("caseId", contextCaseId.processInstanceId);
-				rootResult.put("taskId", contextCaseId.taskInstanceId);
+				contextResult.put("caseId", contextCaseId.processInstanceId);
+				contextResult.put("taskId", contextCaseId.taskInstanceId);
 				logError(rootResult, "taskId unknown");
 				return;
 			}
@@ -307,14 +466,16 @@ class GetContext implements RestApiController {
 			logRest( isLog, "SourceContextData = "+sourceContextData);
 			if (isLog)
 			{
-				rootResult.putAt("sourcecontextdata", sourceContextData);
+				contextResult.putAt("sourcecontextdata", sourceContextData);
 			}
 			//--------------- return the content
 			JsonSlurper slurper = new JsonSlurper();
 			Object contextDataMap = slurper.parseText(contextDataSt);
 			if (contextDataMap == null )
 			{
-				logError(rootResult, "The JSON information is missing : "+sourceContextData);
+				// is acceptable if we ask for the processId
+				if ( ! (contextCaseId.processInstance == null && contextCaseId.archivedProcessInstance==null))
+					logError(rootResult, "The JSON information is missing : "+sourceContextData);
 			}
 			else if (! contextDataMap instanceof Map)
 			{
@@ -324,7 +485,7 @@ class GetContext implements RestApiController {
 			{
 				
 				performanceTrace.addMarker("JsonParse");
-
+				contextCaseId.setContextData((Map<String,Object>) contextDataMap );
 				
 				// decode the Log
 				if (isLogFromParameter==null) {
@@ -338,17 +499,54 @@ class GetContext implements RestApiController {
 				}
 
 				// get the content now
-				getContent( rootResult, isLog,  contextCaseId,  (Map<String,Object>) contextDataMap, performanceTrace, apiClient );
+				getContent( rootResult, isLog,  contextCaseId, performanceTrace, apiClient );
 				
 			}
+			
+			if (contextCaseId.processInstance == null && contextCaseId.archivedProcessInstance==null && contextCaseId.processDefinitionId!=null && (detectTypeUrl != enuTypeUrl.CASEOVERVIEW))
+			{
+				// logger.info(" processInstance/archived=["+contextCaseId.processInstance+"/"+contextCaseId.archivedProcessInstance+"] taskId["+contextCaseId.taskInstanceId+"] isProcessInstanciation="+isProcessInstanciation+", isProcessOverview="+isProcessOverwiew+", isTaskExecution="+isTaskExecution);
+				detectTypeUrl = enuTypeUrl.PROCESSINSTANCIATION;
+			}
+			if (contextCaseId.activityInstance != null)
+			{
+				detectTypeUrl= enuTypeUrl.TASKEXECUTION;
+			}
+			// process initialisation ?
+			contextResult.put("isProcessInstanciation", Boolean.valueOf( detectTypeUrl == enuTypeUrl.PROCESSINSTANCIATION ) );
+			contextResult.put("isProcessOverview", Boolean.valueOf( detectTypeUrl == enuTypeUrl.CASEOVERVIEW));
+			contextResult.put("isTaskExecution", Boolean.valueOf( detectTypeUrl == enuTypeUrl.TASKEXECUTION));
+
+				
+			// is this user is an administrator ?
+			contextResult.putAt("isAdministrator", false);
+				
+			List<Profile> listProfiles=profileAPI.getProfilesForUser(apiSession.getUserId());
+			for (Profile profile : listProfiles)
+			{
+				if (profile.getName().equals("Administrator"))
+					contextResult.putAt("isAdministrator", true);
+			}
+			User user =identityAPI.getUser(apiSession.getUserId());
+			contextResult.put("userid", user.getId());
+			contextResult.put("username", user.getUserName());
+			contextResult.put("processdefinitionid", contextCaseId.processDefinitionId)
+			contextResult.put("taskid", contextCaseId.taskInstanceId)
+			contextResult.put("caseid", contextCaseId.processInstanceId); // contextCaseId.taskInstanceId 
+			
+		
+			
 			performanceTrace.addMarker("getFinalResult");
 			if (isLog)
 			{
 				logRest( isLog, "Final rootResult "+rootResult.toString())
 				logRest( isLog,"Performance :"+performanceTrace.trace() );
-				rootResult.put("performanceRestContextCall", performanceTrace.trace() );
+				contextResult.put("performanceRestContextCall", performanceTrace.trace() );
 			}
-
+			
+			// and now put the context in the result (nota : we may overwride by this way the context variable)
+			rootResult.put("context", contextResult);
+			
 		} catch(DataNotFoundException dnte )
 		{
 			logError( rootResult, "Expect [context] or [globalcontext] variable to pilot what to search");
@@ -385,7 +583,6 @@ class GetContext implements RestApiController {
 	private void getContent( Map<String,Object> rootResult,
 			boolean isLog, 
 			ContextCaseId contextCaseId, 
-			Map<String,Object> contextDataMap,			
 			PerformanceTrace performanceTrace2,
 			APIClient apiClient) 
 	{
@@ -448,9 +645,9 @@ class GetContext implements RestApiController {
 
 
 		// now, process the list
-		for (Object varName : contextDataMap.keySet())
+		for (Object varName : contextCaseId.contextData.keySet())
 		{
-			String varAction = contextDataMap.get( varName ) !=null ? contextDataMap.get( varName ).toString() : null;
+			String varAction = contextCaseId.contextData.get( varName ) !=null ? contextCaseId.contextData.get( varName ).toString() : null;
 			logRest(isLog, "Loop Get variable["+varName+"] / action["+varAction+"]");
 
 			if (varName.equals("*"))
@@ -463,7 +660,8 @@ class GetContext implements RestApiController {
 					List<DataInstance> listDataInstance = processAPI.getProcessDataInstances(contextCaseId.processInstance.getId(), 0,1000);
 					for (DataInstance data : listDataInstance)
 					{
-						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						logRest(true, "************************** DataInstance detected ["+data.getName()+"]");
+						completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.contextData, isLog);
 					}
 					performanceTrace2.addMarker("getAllProcessData");
 				}
@@ -473,7 +671,7 @@ class GetContext implements RestApiController {
 					List<DataInstance> listDataInstance = processAPI.getActivityDataInstances(contextCaseId.activityInstance.getId(), 0,1000);
 					for (DataInstance data : listDataInstance)
 					{
-						completeValue(rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						completeValueProcessVariable(rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.contextData, isLog);
 					}
 					performanceTrace2.addMarker("getAllActivityData");
 
@@ -485,7 +683,7 @@ class GetContext implements RestApiController {
 					List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedProcessDataInstances(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
 					for (ArchivedDataInstance data : listDataInstance)
 					{
-						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.contextData, isLog);
 					}
 					performanceTrace2.addMarker("getAllArchivedProcessData");
 
@@ -495,7 +693,7 @@ class GetContext implements RestApiController {
 					List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedActivityDataInstances(contextCaseId.archivedActivityInstance.getSourceObjectId(), 0,1000);
 					for (ArchivedDataInstance data : listDataInstance)
 					{
-						completeValue( rootResult, data.getName(), varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.contextData, isLog);
 					}
 					performanceTrace2.addMarker("getAllArchivedActivityData");
 
@@ -511,13 +709,18 @@ class GetContext implements RestApiController {
 				for (BusinessDataReference businessData : listBusinessData.values())
 				{
 					logRest(isLog, "Loop Get BDM["+businessData.getName()+"] / type["+businessData.getType()+"]");
-					completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextDataMap, isLog );
+					completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextCaseId.contextData, isLog );
 				}
 				performanceTrace2.addMarker("getBusinessData");
 
-
+			    //--------------------- parameters
+				List<ParameterInstance>	listParameters = processAPI.getParameterInstances(contextCaseId.processDefinitionId, 0, 100, ParameterCriterion.NAME_ASC);
+				if (listParameters!=null)
+					for (ParameterInstance parameter : listParameters)
+						rootResult.put( parameter.getName(), parameter.getValue());
+				
 			}
-			else if (cstActionCaseId.equals(varAction)) {
+			else if (cstActionCaseId.equals(varAction) && (contextCaseId.processInstanceId != null)) {
 				rootResult.put(varName, contextCaseId.processInstanceId);
 				// logRest(isLog,"cstActionCaseId :  new Result["+rootResult+"]");
 			}
@@ -526,7 +729,7 @@ class GetContext implements RestApiController {
 				rootResult.put( varName, contextCaseId.getProcessDefinitionId());
 
 
-			else if (cstActionIsCaseArchived.equals(varAction))
+			else if (cstActionIsCaseArchived.equals(varAction) && (contextCaseId.processInstanceId != null))
 				rootResult.put( varName, contextCaseId.processInstance==null );
 
 			else if (cstActionTaskId.equals(varAction) && contextCaseId.taskInstanceId !=null)
@@ -540,12 +743,12 @@ class GetContext implements RestApiController {
 				// We want to load the data varName : is that a business Data ?
 				if (listBusinessData.containsKey( varName ))
 				{
-					completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, contextDataMap, isLog );
+					completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, contextCaseId.contextData, isLog );
 					performanceTrace2.addMarker("getBdmData["+varName+"]");
 				}
 				else
 				{
-					completeValue( rootResult, varName, varAction, contextCaseId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					completeValueProcessVariable( rootResult, varName, varAction, contextCaseId, apiClient, contextCaseId.contextData, isLog);
 					performanceTrace2.addMarker("getData["+varName+"]");
 				}
 
@@ -555,6 +758,90 @@ class GetContext implements RestApiController {
 			}
 
 		} // end of list
+		
+		
+		// process the document
+		/* produce per document:
+		{"src":
+			{"id":501,"processInstanceId":5001,"name":"oneFile",
+				"author":4,"creationDate":1479345110650,
+				"fileName":"2013-05-14 09.09.23.jpg",
+				"contentMimeType":"image/jpeg",
+				"contentStorageId":"501",
+				"url":"documentDownload?fileName=2013-05-14 09.09.23.jpg&contentStorageId=501",
+				"description":"",
+				"version":"1",
+				"index":-1,
+				"contentFileName":"2013-05-14 09.09.23.jpg"},
+				*/
+		
+		if (contextCaseId.processInstanceId!=null)
+		{
+			List<Document> listDocuments = processAPI.getLastVersionOfDocuments(contextCaseId.processInstanceId, 0,100, DocumentCriterion.NAME_ASC);
+			
+			
+			for (Document oneDoc : listDocuments)
+			{
+				if (oneDoc == null)
+					continue;
+					
+				if (! contextCaseId.isAllowVariableName(oneDoc.getName()))
+					continue;
+
+				logRest(isLog, "************************** Doc detected ["+(oneDoc==null ? null : (oneDoc.getName()+" index="+oneDoc.getIndex()))+"]");
+					
+				Map<String,String> oneDocumentMap = new HashMap<String,Object>();
+				oneDocumentMap.put("id", oneDoc.getId());
+				oneDocumentMap.put("processInstanceId", contextCaseId.processInstanceId);
+				oneDocumentMap.put("name", oneDoc.getName());
+				oneDocumentMap.put("author", oneDoc.getAuthor());
+				oneDocumentMap.put("creationDate", oneDoc.getCreationDate().getTime());
+				oneDocumentMap.put("fileName", oneDoc.getContentFileName());
+				oneDocumentMap.put("contentMimeType", oneDoc.getContentMimeType());
+				oneDocumentMap.put("contentStorageId", oneDoc.getContentStorageId());
+				oneDocumentMap.put("url", oneDoc.getUrl());
+				oneDocumentMap.put("description", oneDoc.getDescription() );
+				oneDocumentMap.put("version", oneDoc.getVersion());
+				oneDocumentMap.put("index", oneDoc.getIndex());
+				oneDocumentMap.put("contentFileName", oneDoc.getContentFileName());
+				oneDocumentMap.put("hasContent", oneDoc.hasContent());
+	
+				Map<String,String> ctxDocumentMap = new HashMap<String,Object>();
+				ctxDocumentMap.put("src", oneDocumentMap );
+				
+				if (oneDoc.getIndex() ==-1)
+				{
+					// not a multiple
+					rootResult.put( oneDoc.getName(), ctxDocumentMap);
+				}
+				else
+				{
+					List listDocs= rootResult.get( oneDoc.getName());
+					if (listDocs==null)
+						listDocs = new ArrayList();
+					// we may have the index 5 when at this moment the list contains only 2 item : extends the list
+					while (listDocs.size()<= oneDoc.getIndex())
+						listDocs.add( null );
+					listDocs.set( oneDoc.getIndex(),ctxDocumentMap); 
+					rootResult.put( oneDoc.getName(), listDocs);
+				}
+				
+			}
+		} else 
+		{
+			// detect all document and create some empty variable
+			DesignProcessDefinition designProcessDefinition = processAPI.getDesignProcessDefinition( contextCaseId.processDefinitionId );
+			FlowElementContainerDefinition flowElementContainerDefinition = designProcessDefinition.getFlowElementContainer();
+			List<DocumentDefinition> listDocumentDefinition =	flowElementContainerDefinition.getDocumentDefinitions();
+			for (DocumentDefinition documentDefinition : listDocumentDefinition )
+				rootResult.put( documentDefinition.getName(), new HashMap());
+				
+			List<DocumentListDefinition> listDocumentListDefinition =	flowElementContainerDefinition.getDocumentListDefinitions();
+			for (DocumentListDefinition documentListDefinition : listDocumentListDefinition )
+				rootResult.put( documentListDefinition.getName(), new ArrayList());
+		
+		}
+		
 	}
 	
 	/* -------------------------------------------------------------------------------- */
@@ -606,7 +893,7 @@ class GetContext implements RestApiController {
 
 	/* -------------------------------------------------------------------------------- */
 	/*																					*/
-	/*	completeValue																	*/
+	/*	completeValueProcessVariable																	*/
 	/*																					*/
 	/* -------------------------------------------------------------------------------- */
 	/**
@@ -616,7 +903,7 @@ class GetContext implements RestApiController {
 	 * @param processInstanceId
 	 * @param taskInstanceId
 	 */
-	private void completeValue( Map<String,Object> rootResult,
+	private void completeValueProcessVariable( Map<String,Object> rootResult,
 			String varName,
 			String varAction,
 			ContextCaseId contextCaseId,
@@ -628,15 +915,15 @@ class GetContext implements RestApiController {
 		ProcessAPI processAPI = apiClient.processAPI;
 		BusinessDataAPI businessDataAPI = apiClient.businessDataAPI;
 
-		// logger.info("completeValue: Get variable["+varName+"]");
+		logRest( isLog, "=== completeValueProcessVariable.begin: Get variable["+varName+"] varAction["+varAction+"] contextDataMap["+contextDataMap+"]");
 
 
 		if (contextCaseId.processInstance != null)
 			try
 			{
 				DataInstance dataInstance = processAPI.getProcessDataInstance(varName.toString(), contextCaseId.processInstance.getId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a PROCESSDATA : ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
-				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction);
+				logRest( isLog, "completeValueProcessVariable: Get variable["+varName+"] is a PROCESSDATA.a : ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
+				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction, contextDataMap, isLog);
 				return;
 			} catch (DataNotFoundException dnte) {};
 
@@ -645,19 +932,19 @@ class GetContext implements RestApiController {
 			{
 				// logger.info("Try get localvariable["+varName+"]");
 				DataInstance dataInstance = processAPI.getActivityDataInstance(varName.toString(), contextCaseId.activityInstance.getId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
-				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction );
+				logRest( isLog, "completeValueProcessVariable: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
+				completeValueFromData( rootResult, dataInstance.getName(), dataInstance.getValue(), varAction, contextDataMap, isLog );
 				return;
 			} catch (DataNotFoundException dnte) {};
 
 		if (contextCaseId.archivedProcessInstance != null)
 			try
 			{
-				logRest( isLog, "completeValue: search variable["+varName+"] in getArchivedProcessDataInstance");
+				logRest( isLog, "completeValueProcessVariable: search variable["+varName+"] in getArchivedProcessDataInstance");
 				ArchivedDataInstance archivedDataInstance = processAPI.getArchivedProcessDataInstance (varName.toString(), contextCaseId.archivedProcessInstance.getSourceObjectId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
+				logRest( isLog, "completeValueProcessVariable: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-				completeValueFromData( rootResult, archivedDataInstance.getName(), archivedDataInstance.getValue(), varAction );
+				completeValueFromData( rootResult, archivedDataInstance.getName(), archivedDataInstance.getValue(), varAction,contextDataMap, isLog );
 				return;
 			} catch (ArchivedDataNotFoundException dnte) {};
 
@@ -666,26 +953,91 @@ class GetContext implements RestApiController {
 
 			try
 			{
-				logRest( isLog, "completeValue: search variable["+varName+"] in getArchivedActivityDataInstance");
+				logRest( isLog, "completeValueProcessVariable: search variable["+varName+"] in getArchivedActivityDataInstance");
 				ArchivedDataInstance archivedDataInstance = processAPI. getArchivedActivityDataInstance( varName.toString(), contextCaseId.archivedActivityInstance.getSourceObjectId() );
-				logRest( isLog, "completeValue: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
+				logRest( isLog, "completeValueProcessVariable: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-				completeValueFromData( rootResult, archivedDataInstance.getName(),archivedDataInstance.getValue(), varAction);
+				completeValueFromData( rootResult, archivedDataInstance.getName(),archivedDataInstance.getValue(), varAction, contextDataMap, isLog);
 				return;
 			} catch (ArchivedDataNotFoundException dnte) {};
 		}
 
 
-
+		logRest( isLog, "=== completeValueProcessVariable.end: Get variable["+varName+"]");
+		
 		return;
 	}
 
 	/**
 	 * save the value in the rootResult. If the value is a Obect 
 	 */
-	private void completeValueFromData( Map<String,Object> rootResult, String varName, Object varValue, String varAction )
+	private void completeValueFromData( Map<String,Object> rootResult, String varName, Object varValue, String varAction,Map<String,Object> contextDataMap, boolean isLog )
 	{
-		rootResult.put(varName, transformValue( varValue, varAction) );
+		Object contextAction = contextDataMap.get( varName );
+		
+		logRest( isLog, "========================= completeValueFromData.begin: Get variable["+varName+"] action["+varAction+"] contextAction["+contextAction+"] contextDataMap["+contextDataMap+"] value["+varValue+"] ");
+		if (contextAction instanceof Map)
+		{
+			logRest( isLog, " completeValueFromData.: Action is MAP : "+contextAction);
+			// attention, we may have at this point an object : it's time to transform it in MAP, LIST, ...
+			Object varValueTransformed = varValue;
+			if (varValueTransformed!= null)
+				if (! ( ( varValueTransformed instanceof Map) || (varValueTransformed instanceof List)))
+				{
+					logRest( isLog, " completeValueFromData.: Transform the object to MAP : "+varValueTransformed);					
+					String jsonSt = new JsonBuilder( varValueTransformed ).toPrettyString();					
+					varValueTransformed = new JsonSlurper().parseText(jsonSt);
+					logRest( isLog, " completeValueFromData.: Transform the objecin MAP : "+varValueTransformed);				
+				}
+			
+			
+			// we have a Map like { Attribut1: xxx}
+			if (varValueTransformed instanceof Map)
+			{
+				logRest( isLog, " completeValueFromData.: Value is MAP : "+varValueTransformed);
+				Map<String,Object> subResult = new HashMap<String,Object>();
+				rootResult.put(varName, subResult);
+				for (String key : contextAction.keySet())
+				{
+					logRest( isLog, " completeValueFromData. recursiv call : key["+key+"] varValueTransformed.get( key )["+varValueTransformed.get( key )+"] contextAction["+contextAction+"]");
+					
+					completeValueFromData( subResult, key, varValueTransformed.get( key ), null, contextAction, isLog);
+				}
+			}
+			else if (varValueTransformed instanceof List)
+			{
+				logRest( isLog, " completeValueFromData.: Value is LIST : "+varValueTransformed);
+				// Ok, apply the action on each element of the list
+				List<Map<String,Object>> subResult = new ArrayList<Map<String,Object>>();
+				rootResult.put(varName, subResult);
+				for (int i=0; i< ((List) varValueTransformed).size();i++)
+				{
+					Map<String,Object> subResultIterator = new HashMap<String,Object>();
+					subResult.add(subResultIterator);
+					for (String key : contextAction.keySet())
+					{
+						completeValueFromData( subResultIterator, key, ((List) varValueTransformed).getAt( i ).get( key ), null, contextAction, isLog);
+					}
+	
+				}
+				
+			}
+			else if (varValue == null)
+			{
+				rootResult.put(varName,null);
+			}
+			else
+			{
+				logRest( isLog, " completeValueFromData.: Value is not a MAP and not a LIST do nothing : "+varValue.getClass().getName());
+				// action is a MAP and the value is not... not, do nothing here
+			}
+		} // end of varcontext as a Map
+		else
+		{
+			logRest( isLog, " completeValueFromData.: Direct transformation ("+(contextAction==null ? "data" : contextAction.toString())+"]");
+			rootResult.put(varName, transformValue( varValue, contextAction==null ? "data" : contextAction.toString()) );
+		}
+		// special case for an enum
 		if (varValue instanceof Enum)
 		{
 			List<String> listOptions = new ArrayList<String>();
@@ -697,6 +1049,7 @@ class GetContext implements RestApiController {
 			}
 			rootResult.put(varName+"_list", listOptions );
 		}
+		logRest( isLog, "========================= completeValueFromData.end: Get variable["+varName+"]");
 		
 	}
 	
@@ -1043,14 +1396,16 @@ class GetContext implements RestApiController {
 	/**
 	 * Transform the value accord
 	 */
-	private static SimpleDateFormat sdfDateTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+	private static SimpleDateFormat sdfDateTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
 	private static SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd");
 
+	public enum DateFormat { DATELONG, DATETIME, DATEJSON };
+	private DateFormat defaultDateFormat= DateFormat.DATELONG;
 	private Object transformValue( Object data, String varAction )
 	{
 		if (data==null)
 			return null;
-		// logger.info("TransformData["+data+"] varAction["+varAction+"]")
+		logger.info("========= TransformData["+data+"] varAction["+varAction+"]")
 		if (data instanceof Date)
 		{
 			if ("date".equals(varAction))
@@ -1059,7 +1414,18 @@ class GetContext implements RestApiController {
 				return sdfDateTime.format( (Date) data);
 			else if ("datelong".equals(varAction))
 				return ((Date) data).getTime();
+			
+			// use the default
+			if (defaultDateFormat==DateFormat.DATELONG )
+				return ((Date) data).getTime();
+			if (defaultDateFormat==DateFormat.DATETIME )
+				return sdfDateTime.format( (Date) data);
+			if (defaultDateFormat==DateFormat.DATEJSON )
+				return sdfDate.format( (Date) data);
+
+			// default : be compatible with the UIDesigner which wait for a timestamp.
 			return ((Date) data).getTime();
+				
 		}
 		if (data instanceof List)
 		{
