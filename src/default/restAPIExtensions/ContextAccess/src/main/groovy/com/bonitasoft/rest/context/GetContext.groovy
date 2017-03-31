@@ -28,6 +28,7 @@ import javax.servlet.http.HttpServletResponse
 
 
 
+
 import org.bonitasoft.engine.api.APIClient;
 import org.bonitasoft.engine.api.BusinessDataAPI;
 import org.bonitasoft.engine.api.IdentityAPI;
@@ -82,7 +83,7 @@ class GetContext implements RestApiController {
 	private static final String cstActionTaskId = "taskId";
 	private static final String cstActionisTaskArchived = "isTaskArchived";
 
-
+	private Configuration configuration;
 	/**
 	 * it's one of this possibility
 	 */
@@ -204,6 +205,8 @@ class GetContext implements RestApiController {
 
 	@Override
 	RestApiResponse doHandle(HttpServletRequest request, RestApiResponseBuilder responseBuilder, RestAPIContext context) {
+		configuration = new Configuration(context);
+		
 		// To retrieve query parameters use the request.getParameter(..) method.
 		// Be careful, parameter values are always returned as String values
 		PerformanceTrace performanceTrace = new PerformanceTrace();
@@ -343,22 +346,23 @@ class GetContext implements RestApiController {
 			}
 
 
-			String defaultDateFormat= request.getParameter("dateformat");
-			if ("DATELONG".equalsIgnoreCase(defaultDateFormat))
+			String dateFormatParameter = request.getParameter("dateformat");
+			if ("DATELONG".equalsIgnoreCase(dateFormatParameter))
 			{
-				defaultDateFormat= DateFormat.DATELONG;
+				dateFormat = DateFormat.DATELONG;
 				sourceContextData+="DateFormat[DATELONG];";
-			}
-			if ("DATETIME".equalsIgnoreCase(defaultDateFormat))
+			} else if ("DATETIME".equalsIgnoreCase(dateFormatParameter))
 			{
-				defaultDateFormat= DateFormat.DATETIME;
+				dateFormat = DateFormat.DATETIME;
 				sourceContextData+="DateFormat[DATETIME];";
-			}
-			if ("DATEJSON".equalsIgnoreCase(defaultDateFormat))
+			} else if ("DATEJSON".equalsIgnoreCase(dateFormatParameter))
 			{
-				defaultDateFormat= DateFormat.DATEJSON;
+				dateFormat = DateFormat.DATEJSON;
 				sourceContextData+="DateFormat[DATEJSON];";
+			} else {
+				dateFormat = configuration.getDefaultDateFormat();
 			}
+			
 			String version = request.getParameter("version");
 			if (version!=null)
 				contextResult.put("version", "2.5");
@@ -1400,7 +1404,7 @@ class GetContext implements RestApiController {
 	private static SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd");
 
 	public enum DateFormat { DATELONG, DATETIME, DATEJSON };
-	private DateFormat defaultDateFormat= DateFormat.DATELONG;
+	private DateFormat dateFormat;
 	private Object transformValue( Object data, String varAction )
 	{
 		if (data==null)
@@ -1416,13 +1420,13 @@ class GetContext implements RestApiController {
 				return ((Date) data).getTime();
 			
 			// use the default
-			if (defaultDateFormat==DateFormat.DATELONG )
-				return ((Date) data).getTime();
-			if (defaultDateFormat==DateFormat.DATETIME )
-				return sdfDateTime.format( (Date) data);
-			if (defaultDateFormat==DateFormat.DATEJSON )
+			if (dateFormat==DateFormat.DATELONG ){
+				return ((Date) data).getTime();}
+			if (dateFormat==DateFormat.DATETIME ){
+				return sdfDateTime.format( (Date) data)};
+			if (dateFormat==DateFormat.DATEJSON ) {
 				return sdfDate.format( (Date) data);
-
+			}
 			// default : be compatible with the UIDesigner which wait for a timestamp.
 			return ((Date) data).getTime();
 				
