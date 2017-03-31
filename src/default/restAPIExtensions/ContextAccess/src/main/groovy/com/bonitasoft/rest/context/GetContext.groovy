@@ -346,17 +346,17 @@ class GetContext implements RestApiController {
 			String defaultDateFormat= request.getParameter("dateformat");
 			if ("DATELONG".equalsIgnoreCase(defaultDateFormat))
 			{
-				defaultDateFormat= DateFormat.DATELONG;
+				this.defaultDateFormat= DateFormat.DATELONG;
 				sourceContextData+="DateFormat[DATELONG];";
 			}
 			if ("DATETIME".equalsIgnoreCase(defaultDateFormat))
 			{
-				defaultDateFormat= DateFormat.DATETIME;
+				this.defaultDateFormat= DateFormat.DATETIME;
 				sourceContextData+="DateFormat[DATETIME];";
 			}
 			if ("DATEJSON".equalsIgnoreCase(defaultDateFormat))
 			{
-				defaultDateFormat= DateFormat.DATEJSON;
+				this.defaultDateFormat= DateFormat.DATEJSON;
 				sourceContextData+="DateFormat[DATEJSON];";
 			}
 			String version = request.getParameter("version");
