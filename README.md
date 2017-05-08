@@ -395,3 +395,7 @@ To set the URL in the RestAPi Context, do the following:
     DateTime is now new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ")
 
 
+2.7  TODO
+	globalContext : comment y acceder en process instanctiation ? 
+				Parametre dans globalcontext : ne marche pas
+				
