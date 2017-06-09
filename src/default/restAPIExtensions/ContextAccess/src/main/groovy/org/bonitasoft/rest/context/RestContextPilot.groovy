@@ -1,5 +1,4 @@
-package org.bonitasoft.rest.context
-// package org.bonitasoft.rest.context;
+package org.bonitasoft.rest.context;
 
 import java.util.logging.Logger
 
@@ -50,19 +49,23 @@ public class RestContextPilot {
 
     Map<String,Object> pilotDataMap;
 
+    Object contextDataOrigin =null;
+    String contextDataSt = null;
 
     /**
      * after the decodeParameters, we get the cont
      */
     RestContextCaseId contextCaseId;
 
+    RestContextTrackPerformance trackPerformance;
+
     boolean isAllowAllVariables;
     boolean isPilotDetected=false;
 
 
-    public void setContextCaseId(RestContextCaseId contextCaseId)
-    {
+    public void setContextCaseId(RestContextCaseId contextCaseId, RestContextTrackPerformance trackPerformance) {
         this.contextCaseId = contextCaseId;
+        this.trackPerformance = trackPerformance;
     }
     /**
      * decode the pilot
@@ -71,8 +74,6 @@ public class RestContextPilot {
     public void decodeParameters() {
         analysisString="";
         errorMessage=null;
-        Object contextDataOrigin =null;
-        String contextDataSt = null;
         pilotDataMap=null;
 
         this.isPilotDetected= false;
@@ -87,52 +88,18 @@ public class RestContextPilot {
             // Ok, no worry, let's try different options
             {}
         }
-        if (contextDataOrigin == null && contextCaseId.processInstanceId !=null)
-        {
-            try
-            {
-                contextDataOrigin = contextCaseId.processAPI.getProcessDataInstance("globalcontext", contextCaseId.processInstanceId);
-                this.isPilotDetected= true;
 
-                contextDataSt = contextDataOrigin.getValue();
-                analysisString+="ProcessDataInstance[globalcontext] value="+contextDataOrigin.getValue();
-            } catch(DataNotFoundException dnte )
-            // ok, maybe no context where given ?
-            {}
-        }
-        if (contextDataOrigin == null && contextCaseId.archivedProcessInstance!=null)
-        {
-            try
-            {
-                contextDataOrigin =  contextCaseId.processAPI.getArchivedProcessDataInstance("globalcontext", contextCaseId.archivedProcessInstance.getSourceObjectId());
-                contextDataSt = contextDataOrigin.getValue();
-                this.isPilotDetected= true;
-
-                analysisString+="ArchivedProcessDataInstance[globalcontext] value="+contextDataOrigin.getValue();
-            } catch(ArchivedDataNotFoundException dnte )
-            // still Ok, search after
-            {}
-        }
+        // first level is special because the case may be archived. Then, no need to search all the hierarchy (if we have a hierary, that's mean the case is alive)
+        if (contextDataOrigin == null)
+            searchContextData(contextCaseId.processInstanceId , contextCaseId.archivedProcessInstance,  contextCaseId.processDefinitionId );
 
 
-        // Still null ? maybe a parameters exist
-        // bobparameters
-        if (contextDataOrigin == null && contextCaseId.processDefinitionId!=null)
-        {
-            List<ParameterInstance> listParameters = contextCaseId.processAPI.getParameterInstances(contextCaseId.processDefinitionId, 0, 500, ParameterCriterion.NAME_ASC);
-            if (listParameters!=null)
-                for (ParameterInstance parameter : listParameters)
-            {
-                if ( "paramcontext".equalsIgnoreCase( parameter.getName() ))
-                {
-                    contextDataOrigin = parameter;
-                    contextDataSt = parameter.getValue();
-                    this.isPilotDetected= true;
+        if (contextDataOrigin == null && contextCaseId.processInstanceRoot!=null)
+            searchContextData(contextCaseId.processInstanceRoot.getId() , null, contextCaseId.processInstanceRoot.getProcessDefinitionId() );
 
-                    analysisString+= "Parameters [paramcontext]";
-                }
-            }
-        }
+
+
+        //  still null and a parent process ? Look here
 
         // no data were given : create a default one
         if (contextDataOrigin == null)
@@ -199,6 +166,60 @@ public class RestContextPilot {
     }
 
 
+    /**
+     *
+     */
+    private void searchContextData( Long processInstanceId , Long archivedProcessInstanceId,  Long processDefinitionId )
+    {
+        if (processInstanceId !=null)
+        {
+            try
+            {
+                contextDataOrigin = contextCaseId.processAPI.getProcessDataInstance("globalcontext", processInstanceId);
+                this.isPilotDetected= true;
+
+                contextDataSt = contextDataOrigin.getValue();
+                analysisString+="ProcessDataInstance[globalcontext] value="+contextDataOrigin.getValue();
+                return;
+            } catch(DataNotFoundException dnte )
+            // ok, maybe no context where given ?
+            {}
+        }
+        if (archivedProcessInstanceId!=null)
+        {
+            try
+            {
+                contextDataOrigin =  contextCaseId.processAPI.getArchivedProcessDataInstance("globalcontext",archivedProcessInstanceId.getSourceObjectId());
+                contextDataSt = contextDataOrigin.getValue();
+                this.isPilotDetected= true;
+
+                analysisString+="ArchivedProcessDataInstance[globalcontext] value="+contextDataOrigin.getValue();
+                return;
+            } catch(ArchivedDataNotFoundException dnte )
+            // still Ok, search after
+            {}
+        }
+
+
+        // maybe a parameters exist
+        if (processDefinitionId!=null)
+        {
+            List<ParameterInstance> listParameters = contextCaseId.processAPI.getParameterInstances(processDefinitionId, 0, 500, ParameterCriterion.NAME_ASC);
+            if (listParameters!=null)
+                for (ParameterInstance parameter : listParameters)
+            {
+                if ( "paramcontext".equalsIgnoreCase( parameter.getName() ))
+                {
+                    contextDataOrigin = parameter;
+                    contextDataSt = parameter.getValue();
+                    this.isPilotDetected= true;
+
+                    analysisString+= "Parameters [paramcontext]";
+                    return;
+                }
+            }
+        }
+    }
 
     /* ********************************************************************************* */
     /*                                                                                                                                                                   */
@@ -248,6 +269,7 @@ public class RestContextPilot {
     public boolean checkPermissionString(String varName, String permissionControl)
     {
         String analysis="isAllowVariableName["+varName+"] found["+permissionControl+"]";
+        Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("checkPermissionString["+varName+"]");
 
         boolean allowAccess=false;
         boolean isOnlyFormatData=true;
@@ -283,6 +305,11 @@ public class RestContextPilot {
                     analysis+=":publicAccess";
                     allowAccess=true;
                     isOnlyFormatData=false;
+                }
+                else if ("admin".equals( onePermission ))
+                {
+                    allowAccess= contextCaseId.isAdministratorUser();
+                    analysis+=":admin ? "+allowAccess;
                 }
                 else if ("initiator".equals( onePermission ))
                 {
@@ -336,25 +363,13 @@ public class RestContextPilot {
                     isOnlyFormatData=false;
                     String actorName = onePermission.substring("actor:".length());
                     analysis+=":actorName["+actorName+"] ";
-                    int startIndex=0;
-                    try
+                    Boolean isPart = isPartOfActor( actorName, processDefinitionId );
+                    if (isPart==null)
+                        analysis+=":Actor not found;"
+                    else if (isPart)
                     {
-                        List<Long> listUsersId = contextCaseId.processAPI.getUserIdsForActor(processDefinitionId, actorName, startIndex, 1000);
-
-                        while (! allowAccess && listUsersId.size()>0)
-                        {
-                            // logger.info("getUserIdsForActor start at "+startIndex+" found "+listUsersId.size()+" record")
-                            startIndex+= 1000;
-                            if (listUsersId.contains( contextCaseId.userId ))
-                            {
-                                analysis+="part of actor";
-                                allowAccess=true;
-                            }
-                            else
-                                listUsersId = contextCaseId.processAPI.getUserIdsForActor(processDefinitionId, actorName, startIndex, 1000);
-                        }
-                    }catch (RetrieveException e){
-                        analysis+=":Actor not found;";
+                        analysis+="part of actor";
+                        allowAccess=true;
                     }
                 }
                 else if (onePermission.startsWith("format:"))
@@ -375,11 +390,56 @@ public class RestContextPilot {
             analysis+=";OnlyAFormatData - equals to public";
             allowAccess=true;
         }
-        contextCaseId.log("analysis: "+analysis+" RESULT="+allowAccess);
+        contextCaseId.log("RestContextPilot.checkPermissionString : analysis: "+analysis+" RESULT="+allowAccess);
+        trackPerformance.endSubOperation( trackSubOperation);
+
         return allowAccess;
     }
 
+    /**
+     * Actor Cache
+     *
+     */
+    private Map<String,Boolean> cacheActor= new HashMap<String,Boolean>();
 
+    /**
+     * isPart : return True (part of ) False (not part of ) NULL (actor unknown
+     * @param actorName
+     * @return
+     */
+    public Boolean isPartOfActor(String actorName, long processDefinitionId)
+    {
+        if (cacheActor.containsKey( actorName ))
+        {
+            return  cacheActor.get( actorName );
+        }
+
+        // calculated and save it
+        int startIndex=0;
+        try
+        {
+            List<Long> listUsersId = contextCaseId.processAPI.getUserIdsForActor(processDefinitionId, actorName, startIndex, 1000);
+
+            while (listUsersId.size()>0)
+            {
+                // logger.info("getUserIdsForActor start at "+startIndex+" found "+listUsersId.size()+" record")
+                startIndex+= 1000;
+                if (listUsersId.contains( contextCaseId.userId ))
+                {
+                    cacheActor.put(actorName, Boolean.TRUE );
+                    return true;
+                }
+                else
+                    listUsersId = contextCaseId.processAPI.getUserIdsForActor(processDefinitionId, actorName, startIndex, 1000);
+            }
+        }catch (RetrieveException e){
+            cacheActor.put(actorName,null);
+            return null;
+            // analysis+=":Actor not found;";
+        }
+        cacheActor.put(actorName, Boolean.FALSE )
+        return false;
+    }
 
 
 }

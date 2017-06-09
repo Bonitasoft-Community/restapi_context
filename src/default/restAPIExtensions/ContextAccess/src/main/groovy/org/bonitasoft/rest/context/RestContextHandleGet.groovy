@@ -66,34 +66,6 @@ class RestContextHandleGet implements RestApiController {
 
     /* -------------------------------------------------------------------------------- */
     /*																					*/
-    /*	class PerformanceTrace															*/
-    /*																					*/
-    /* -------------------------------------------------------------------------------- */
-    public static class PerformanceTrace {
-        private List<Map<String,Object>> listOperations = new ArrayList<Map<String,Object>>();
-        public void addMarker(String operation) {
-            long currentTime= System.currentTimeMillis();
-            Map<String,Object> oneOperation = new HashMap<String,Object>();
-            oneOperation.put("t",System.currentTimeMillis());
-            oneOperation.putAt("n",operation);
-            listOperations.add( oneOperation );
-        }
-
-        public String trace() {
-            String result="";
-            for (int i=1;i<listOperations.size();i++) {
-                String time = ((long) listOperations.get( i ).getAt("t")) - ((long)listOperations.get( i-1 ).getAt("t"));
-                result+= listOperations.get( i ).getAt("n")+":"+time+" ms,";
-            }
-            String time = ((long) listOperations.get( listOperations.size()-1 ).getAt("t")) - ((long)listOperations.get( 0 ).getAt("t"));
-            result+="Total "+time+" ms";
-            return result;
-        }
-    }
-
-
-    /* -------------------------------------------------------------------------------- */
-    /*																					*/
     /*	dohandle																		*/
     /*																					*/
     /* -------------------------------------------------------------------------------- */
@@ -104,8 +76,8 @@ class RestContextHandleGet implements RestApiController {
 
         // To retrieve query parameters use the request.getParameter(..) method.
         // Be careful, parameter values are always returned as String values
-        PerformanceTrace performanceTrace = new PerformanceTrace();
-        performanceTrace.addMarker("start");
+        RestContextTrackPerformance trackPerformance = new RestContextTrackPerformance();
+        trackPerformance.addMarker("start");
 
         // Here is an example of how you can retrieve configuration parameters from a properties file
         // It is safe to remove this if no configuration is required
@@ -131,7 +103,7 @@ class RestContextHandleGet implements RestApiController {
             contextCaseId = new RestContextCaseId( apiSession.getUserId(), processAPI, identityAPI,  profileAPI);
             pilot = new RestContextPilot();
             contextCaseId.setPilot(  pilot  );
-            pilot.setContextCaseId(contextCaseId );
+            pilot.setContextCaseId(contextCaseId, trackPerformance );
 
             contextCaseId.decodeParametersFromHttp( request, configuration);
             sourceContextData+= contextCaseId.getAnalysisString();
@@ -179,7 +151,7 @@ class RestContextHandleGet implements RestApiController {
             // ------------------ retrieve correct information
             // if the processinstance exist ? The task Id ?
 
-            performanceTrace.addMarker("Detectparameter");
+            trackPerformance.addMarker("Detectparameter");
 
             //----------------------- get the pilot (contextDataOrigin and contextDataSt)
             if (canContinue)
@@ -187,7 +159,7 @@ class RestContextHandleGet implements RestApiController {
 
                 // not : at this moment, the contextDataOrigin may be NOT NULL and the contextDataSt is null : then the parseText will failed
 
-                performanceTrace.addMarker("getPilot");
+                trackPerformance.addMarker("getPilot");
 
                 contextCaseId.log( "SourceContextData = "+sourceContextData);
                 if (contextCaseId.isLog)
@@ -203,7 +175,7 @@ class RestContextHandleGet implements RestApiController {
 
             if (canContinue)
             {
-                performanceTrace.addMarker("JsonParse");
+                trackPerformance.addMarker("JsonParse");
 
 
                 // decode the Log
@@ -218,7 +190,7 @@ class RestContextHandleGet implements RestApiController {
                 }
 
                 // get the content now
-                getContent( rootResult,  contextCaseId, performanceTrace, apiClient );
+                getContent( rootResult,  contextCaseId, trackPerformance, apiClient );
 
             }
 
@@ -228,12 +200,13 @@ class RestContextHandleGet implements RestApiController {
             }
 
 
-            performanceTrace.addMarker("getFinalResult");
+            trackPerformance.addMarker("getFinalResult");
             if (contextCaseId.isLog)
             {
                 contextCaseId.log( "Final rootResult "+rootResult.toString())
-                contextCaseId.log( "Performance :"+performanceTrace.trace() );
-                contextResult.put( "performanceRestContextCall", performanceTrace.trace() );
+
+                contextResult.put( "performanceDetail", trackPerformance.trace() );
+                contextResult.put( "performanceTotalMs", trackPerformance.getTotalTime() );
             }
 
             // and now put the context in the result (nota : we may overwride by this way the context variable)
@@ -255,6 +228,22 @@ class RestContextHandleGet implements RestApiController {
             contextCaseId.logError( rootResult, e.toString()+" at "+exceptionDetails);
         }
         finally {
+
+            /*
+             try
+             {
+             contextCaseId.log( "=================== Before jsonResult");
+             traceResult( rootResult, "", contextCaseId);
+             }
+             catch (Exception e)
+             {
+             StringWriter sw = new StringWriter();
+             e.printStackTrace(new PrintWriter(sw));
+             String exceptionDetails = sw.toString();
+             contextCaseId.logError( rootResult, e.toString()+" at "+exceptionDetails);
+             }
+             */
+
             contextCaseId.log( "=================== End GetContext RESTAPI");
 
             // Send the result as a JSON representation
@@ -264,7 +253,22 @@ class RestContextHandleGet implements RestApiController {
     }
 
 
+    private void  traceResult( Map<String,Object> map, String indentation, RestContextCaseId contextCaseId)
+    {
+        for (String key: map.keySet())
+        {
+            Object value=map.get( key );
+            if (value instanceof Map)
+            {
+                contextCaseId.log( indentation+"["+key+"] = MAP");
+                traceResult( (Map) value, indentation+"    ", contextCaseId);
+            }
+            else
+                contextCaseId.log( indentation+"["+key+"] = ["+ (value==null ? "null": value.getClass().getName()+"/"+value) +"]");
 
+
+        }
+    }
     /**
      * get the content of the REST API
      * @param contextCaseId
@@ -272,7 +276,7 @@ class RestContextHandleGet implements RestApiController {
      */
     private void getContent( Map<String,Object> rootResult,
             RestContextCaseId contextCaseId,
-            PerformanceTrace performanceTrace2,
+            RestContextTrackPerformance trackPerformance,
             APIClient apiClient)
     {
         // get the list of all Business Data
@@ -286,7 +290,10 @@ class RestContextHandleGet implements RestApiController {
         {
             contextCaseId.log( "Collect BusinessData from: processinstanceid["+contextCaseId.processInstanceId+"]");
 
+            Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessBusinessDataReferences");
             List<BusinessDataReference>  tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.processInstanceId, 0,1000);
+            trackPerformance.endSubOperation( trackSubOperation);
+
             if (tempList!=null)
             {
                 contextCaseId.log( "Collect BusinessData from: processinstanceid["+tempList.size()+"]");
@@ -300,7 +307,10 @@ class RestContextHandleGet implements RestApiController {
         {
 
             // logger.info(">>> *BEGIN* ArchivedProcessInstanceExecutionContext<<");
+            Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getArchivedProcessInstanceExecutionContext");
             Map<String,Serializable> map = processAPI.getArchivedProcessInstanceExecutionContext(contextCaseId.archivedProcessInstance.getId());
+            trackPerformance.endSubOperation( trackSubOperation);
+
             for (String key : map.keySet() )
             {
                 if (map.get( key ) instanceof BusinessDataReference)
@@ -313,8 +323,10 @@ class RestContextHandleGet implements RestApiController {
             }
             contextCaseId.log( "Collect BusinessData from: getArchivedProcessInstanceExecutionContext :archivedProcessInstance.getId() ["+listBusinessData.size()+"]");
             // logger.info(">>> *END* ArchivedProcessInstanceExecutionContext<<");
-
+            trackSubOperation = trackPerformance.startSubOperation("getProcessBusinessDataReferences archivedSOURCEProcessInstance["+contextCaseId.archivedProcessInstance.getSourceObjectId()+"]");
             List<BusinessDataReference>  tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
+            trackPerformance.endSubOperation( trackSubOperation);
+
             if (tempList!=null)
             {
                 contextCaseId.log( "Collect BusinessData from: archivedActivityInstance.getSourceObjectId() ["+tempList.size()+"]");
@@ -322,7 +334,9 @@ class RestContextHandleGet implements RestApiController {
                     listBusinessData.put( bde.getName(), bde );
 
             }
+            trackSubOperation = trackPerformance.startSubOperation("getProcessBusinessDataReferences archiveProcessInstance["+contextCaseId.archivedProcessInstance.getId()+"]");
             tempList = businessDataAPI.getProcessBusinessDataReferences(contextCaseId.archivedProcessInstance.getId(), 0,1000);
+            trackPerformance.endSubOperation( trackSubOperation);
             if (tempList!=null)
             {
                 contextCaseId.log( "Collect BusinessData from: archivedActivityInstance.getId() ["+tempList.size()+"]");
@@ -330,7 +344,7 @@ class RestContextHandleGet implements RestApiController {
                     listBusinessData.put( bde.getName(), bde );
             }
         }
-        performanceTrace2.addMarker("collectListBusinessData");
+        trackPerformance.addMarker("collectListBusinessData");
 
 
         // now, process the list
@@ -348,48 +362,62 @@ class RestContextHandleGet implements RestApiController {
                 if (contextCaseId.processInstance!=null)
                 {
                     instanceForBdm = contextCaseId.processInstance.getId();
+                    Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstances");
                     List<DataInstance> listDataInstance = processAPI.getProcessDataInstances(contextCaseId.processInstance.getId(), 0,1000);
+                    trackPerformance.endSubOperation( trackSubOperation);
+
                     for (DataInstance data : listDataInstance)
                     {
                         contextCaseId.log( "************************** DataInstance detected ["+data.getName()+"]");
-                        completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap() );
+                        completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(), trackPerformance );
                     }
-                    performanceTrace2.addMarker("getAllProcessData");
+                    trackPerformance.addMarker("getAllProcessData");
                 }
 
                 if (contextCaseId.activityInstance!=null)
                 {
+                    Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getActivityDataInstances");
                     List<DataInstance> listDataInstance = processAPI.getActivityDataInstances(contextCaseId.activityInstance.getId(), 0,1000);
+                    trackPerformance.endSubOperation( trackSubOperation);
+
                     for (DataInstance data : listDataInstance)
                     {
-                        contextCaseId.log( "************************** LocalDataInstance detected ["+data.getName()+"]");
-                        completeValueProcessVariable(rootResult, data.getName(), varAction, contextCaseId, apiClient,contextCaseId.getPilot().getPilotDataMap() );
+                        contextCaseId.log( "************************** LocalDataInstance detected ["+data.getName()+"] contentType["+data.getContainerType()+"]");
+                        if (! "PROCESS_INSTANCE".equals( data.getContainerType() ))
+                            completeValueProcessVariable(rootResult, data.getName(), varAction, contextCaseId, apiClient,contextCaseId.getPilot().getPilotDataMap(), trackPerformance );
                     }
-                    performanceTrace2.addMarker("getAllActivityData");
+                    trackPerformance.addMarker("getAllActivityData");
 
                 }
                 // ----- archived part
                 if (contextCaseId.archivedProcessInstance!=null)
                 {
                     instanceForBdm = contextCaseId.archivedProcessInstance.getId();
+                    Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getArchivedProcessDataInstances");
                     List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedProcessDataInstances(contextCaseId.archivedProcessInstance.getSourceObjectId(), 0,1000);
+                    trackPerformance.endSubOperation( trackSubOperation);
+
                     for (ArchivedDataInstance data : listDataInstance)
                     {
-                        contextCaseId.log( "************************** ArchivedDataInstance detected ["+data.getName()+"]");
-                        completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap()  );
+                        contextCaseId.log( "************************** ArchivedDataInstance detected ["+data.getName()+"] contentType["+data.getContainerType()+"]");
+                        if (! "PROCESS_INSTANCE".equals( data.getContainerType() ))
+                            completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(), trackPerformance  );
                     }
-                    performanceTrace2.addMarker("getAllArchivedProcessData");
+                    trackPerformance.addMarker("getAllArchivedProcessData");
 
                 }
                 if (contextCaseId.archivedActivityInstance!=null)
                 {
+                    Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getArchivedActivityDataInstances");
                     List<ArchivedDataInstance> listDataInstance = processAPI.getArchivedActivityDataInstances(contextCaseId.archivedActivityInstance.getSourceObjectId(), 0,1000);
+                    trackPerformance.endSubOperation( trackSubOperation);
+
                     for (ArchivedDataInstance data : listDataInstance)
                     {
                         contextCaseId.log( "************************** ArchivedActivityDataInstance detected ["+data.getName()+"]");
-                        completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap() );
+                        completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(),trackPerformance );
                     }
-                    performanceTrace2.addMarker("getAllArchivedActivityData");
+                    trackPerformance.addMarker("getAllArchivedActivityData");
 
                 }
 
@@ -403,15 +431,18 @@ class RestContextHandleGet implements RestApiController {
                 for (BusinessDataReference businessData : listBusinessData.values())
                 {
                     contextCaseId.log( "Loop Get BDM["+businessData.getName()+"] / type["+businessData.getType()+"]");
-                    completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap()  );
+                    completeValueBdmData( rootResult, businessData, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(),trackPerformance  );
                 }
-                performanceTrace2.addMarker("getBusinessData");
+                trackPerformance.addMarker("getBusinessData");
 
                 //--------------------- parameters
                 contextCaseId.log( "Check parameters");
                 if (contextCaseId.processDefinitionId!=null)
                 {
+                    Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getParameterInstances");
                     List<ParameterInstance>	listParameters = processAPI.getParameterInstances(contextCaseId.processDefinitionId, 0, 100, ParameterCriterion.NAME_ASC);
+                    trackPerformance.endSubOperation( trackSubOperation);
+
                     if (listParameters!=null)
                         for (ParameterInstance parameter : listParameters)
                     {
@@ -445,15 +476,15 @@ class RestContextHandleGet implements RestApiController {
                 {
                     Map<String,Object> mapPilot = contextCaseId.getPilot().getPilotDataMap() ;
 
-                    completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, mapPilot  );
-                    performanceTrace2.addMarker("getBdmData["+varName+"]");
+                    completeValueBdmData( rootResult, listBusinessData.get( varName ), contextCaseId, apiClient, mapPilot, trackPerformance  );
+                    trackPerformance.addMarker("getBdmData (completeValueBdmData) ["+varName+"]");
                 }
                 else
                 {
                     Map<String,Object> mapPilot = contextCaseId.getPilot().getPilotDataMap() ;
 
-                    completeValueProcessVariable( rootResult, varName, varAction, contextCaseId, apiClient, mapPilot );
-                    performanceTrace2.addMarker("getData["+varName+"]");
+                    completeValueProcessVariable( rootResult, varName, varAction, contextCaseId, apiClient, mapPilot, trackPerformance );
+                    trackPerformance.addMarker("getData (completeValueProcessVariable)["+varName+"]");
                 }
 
 
@@ -481,8 +512,9 @@ class RestContextHandleGet implements RestApiController {
 
         if (contextCaseId.processInstanceId!=null)
         {
+            Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getLastVersionOfDocuments");
             List<Document> listDocuments = processAPI.getLastVersionOfDocuments(contextCaseId.processInstanceId, 0,100, DocumentCriterion.NAME_ASC);
-
+            trackPerformance.endSubOperation( trackSubOperation);
 
             for (Document oneDoc : listDocuments)
             {
@@ -534,6 +566,7 @@ class RestContextHandleGet implements RestApiController {
         } else if (contextCaseId.processDefinitionId !=null)
         {
             // detect all document and create some empty variable
+            Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("detectDocument");
             DesignProcessDefinition designProcessDefinition = processAPI.getDesignProcessDefinition( contextCaseId.processDefinitionId );
             FlowElementContainerDefinition flowElementContainerDefinition = designProcessDefinition.getFlowElementContainer();
             List<DocumentDefinition> listDocumentDefinition =	flowElementContainerDefinition.getDocumentDefinitions();
@@ -543,6 +576,8 @@ class RestContextHandleGet implements RestApiController {
             List<DocumentListDefinition> listDocumentListDefinition =	flowElementContainerDefinition.getDocumentListDefinitions();
             for (DocumentListDefinition documentListDefinition : listDocumentListDefinition )
                 rootResult.put( documentListDefinition.getName(), new ArrayList());
+
+            trackPerformance.endSubOperation( trackSubOperation);
 
         }
 
@@ -612,7 +647,8 @@ class RestContextHandleGet implements RestApiController {
             String varAction,
             RestContextCaseId contextCaseId,
             APIClient apiClient,
-            Map<String,Object> pilotDataMap)
+            Map<String,Object> pilotDataMap,
+            RestContextTrackPerformance trackPerformance)
     {
 
         ProcessAPI processAPI = apiClient.processAPI;
@@ -625,10 +661,15 @@ class RestContextHandleGet implements RestApiController {
         if (contextCaseId.processInstance != null)
             try
             {
+                Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / getProcessData");
                 DataInstance dataInstance = processAPI.getProcessDataInstance(varName.toString(), contextCaseId.processInstance.getId() );
+                trackPerformance.endSubOperation( trackSubOperation);
+
                 contextCaseId.log( "completeValueProcessVariable: Get variable["+varName+"] is a PROCESSDATA.a : ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
 
-                restContextTransformData.transform( rootResult, "", dataInstance.getName(), dataInstance.getValue(), pilotDataMap,0);
+                trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / transform");
+                restContextTransformData.transform( rootResult, dataInstance.getName(), dataInstance.getName(), dataInstance.getValue(), pilotDataMap,0);
+                trackPerformance.endSubOperation( trackSubOperation);
 
                 return;
             } catch (DataNotFoundException dnte) {};
@@ -637,9 +678,14 @@ class RestContextHandleGet implements RestApiController {
             try
             {
                 // logger.info("Try get localvariable["+varName+"]");
+                Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / getActivityData");
                 DataInstance dataInstance = processAPI.getActivityDataInstance(varName.toString(), contextCaseId.activityInstance.getId() );
+                trackPerformance.endSubOperation( trackSubOperation);
+
                 contextCaseId.log( "completeValueProcessVariable: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataInstance.getValue()+"] class["+dataInstance.getClassName()+"]");
-                restContextTransformData.transform( rootResult, "", dataInstance.getName(), dataInstance.getValue(),  pilotDataMap,0 );
+                trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / transform");
+                restContextTransformData.transform( rootResult, dataInstance.getName(), dataInstance.getName(), dataInstance.getValue(),  pilotDataMap,0 );
+                trackPerformance.endSubOperation( trackSubOperation);
                 return;
             } catch (DataNotFoundException dnte) {};
 
@@ -647,10 +693,15 @@ class RestContextHandleGet implements RestApiController {
             try
             {
                 contextCaseId.log( "completeValueProcessVariable: search variable["+varName+"] in getArchivedProcessDataInstance");
+                Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / getrchivedProcessData");
                 ArchivedDataInstance archivedDataInstance = processAPI.getArchivedProcessDataInstance (varName.toString(), contextCaseId.archivedProcessInstance.getSourceObjectId() );
+                trackPerformance.endSubOperation( trackSubOperation);
+
                 contextCaseId.log( "completeValueProcessVariable: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-                restContextTransformData.transform( rootResult, "", archivedDataInstance.getName(), archivedDataInstance.getValue(), pilotDataMap,0 );
+                trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / transform");
+                restContextTransformData.transform( rootResult, archivedDataInstance.getName(), archivedDataInstance.getName(), archivedDataInstance.getValue(), pilotDataMap,0 );
+                trackPerformance.endSubOperation( trackSubOperation);
                 return;
             } catch (ArchivedDataNotFoundException dnte) {};
 
@@ -660,10 +711,14 @@ class RestContextHandleGet implements RestApiController {
             try
             {
                 contextCaseId.log( "completeValueProcessVariable: search variable["+varName+"] in getArchivedActivityDataInstance");
+                Map<String,Object> trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / getArchivedActivityProcessData");
                 ArchivedDataInstance archivedDataInstance = processAPI. getArchivedActivityDataInstance( varName.toString(), contextCaseId.archivedActivityInstance.getSourceObjectId() );
+                trackPerformance.endSubOperation( trackSubOperation);
                 contextCaseId.log( "completeValueProcessVariable: Get variable["+varName+"] is a ARCHIVEDPROCESSDATA : ["+archivedDataInstance.getValue()+"] class["+archivedDataInstance.getClassName()+"]");
 
-                restContextTransformData.transform( rootResult,"",  archivedDataInstance.getName(),archivedDataInstance.getValue(),  pilotDataMap, 0);
+                trackSubOperation = trackPerformance.startSubOperation("getProcessDataInstance["+varName.toString()+"] / transform");
+                restContextTransformData.transform( rootResult, archivedDataInstance.getName(),  archivedDataInstance.getName(),archivedDataInstance.getValue(),  pilotDataMap, 0);
+                trackPerformance.endSubOperation( trackSubOperation);
                 return;
             } catch (ArchivedDataNotFoundException dnte) {};
         }
@@ -674,99 +729,7 @@ class RestContextHandleGet implements RestApiController {
         return;
     }
 
-    /**
-     * save the value in the rootResult. If the value is a Object
-     * @deprecated
-     *
-     private void completeValueFromDataDeprecated( Map<String,Object> rootResult,   String varName,    Object varValue,    Map<String,Object> pilotDataMap, RestContextCaseId contextCaseId )
-     {
-     if (pilotDataMap==null)
-     return;
-     Object pilotAction = pilotDataMap.get( varName );
-     contextCaseId.log( "========================= completeValueFromData.begin: Get variable["+varName+"] action["+pilotAction+"] pilotAction["+pilotAction+"] pilotDataMap["+pilotDataMap+"] value["+varValue+"] ");
-     if (pilotAction instanceof Map)
-     {
-     contextCaseId.log( " completeValueFromData.: Action is MAP : "+pilotAction);
-     // attention, we may have at this point an object : it's time to transform it in MAP, LIST, ...
-     Object varValueTransformed = varValue;
-     if (varValueTransformed!= null)
-     if (! ( ( varValueTransformed instanceof Map) || (varValueTransformed instanceof List)))
-     {
-     contextCaseId.log( " completeValueFromData.: Transform the object to MAP : "+varValueTransformed);
-     String jsonSt = new JsonBuilder( varValueTransformed ).toPrettyString();
-     varValueTransformed = new JsonSlurper().parseText(jsonSt);
-     contextCaseId.log( " completeValueFromData.: Transform the objecin MAP : "+varValueTransformed);
-     }
-     // we have a Map like { Attribut1: xxx}
-     if (varValueTransformed instanceof Map)
-     {
-     contextCaseId.log( " completeValueFromData.: Value is MAP : "+varValueTransformed);
-     Map<String,Object> subResult = new HashMap<String,Object>();
-     rootResult.put(varName, subResult);
-     for (String key : pilotAction.keySet())
-     {
-     contextCaseId.log( " completeValueFromData. recursiv call : key["+key+"] varValueTransformed.get( key )["+varValueTransformed.get( key )+"] pilotAction["+pilotAction+"]");
-     if (pilotAction.get( key ) instanceof Map)
-     completeValueFromData( subResult, key, varValueTransformed.get( key ),   pilotAction.get( key ), contextCaseId);
-     else
-     rootResult.put(varName,  transformValue( varValueTransformed, pilotAction.get( key )==null ? null : pilotAction.get( key ).toString(),  contextCaseId ));
-     }
-     }
-     else if (varValueTransformed instanceof List)
-     {
-     contextCaseId.log( " completeValueFromData.: Value is LIST : "+varValueTransformed);
-     // Ok, apply the action on each element of the list
-     List<Map<String,Object>> subResult = new ArrayList<Map<String,Object>>();
-     rootResult.put(varName, subResult);
-     for (int i=0; i< ((List) varValueTransformed).size();i++)
-     {
-     Map<String,Object> subResultIterator = new HashMap<String,Object>();
-     subResult.add(subResultIterator);
-     for (String key : pilotAction.keySet())
-     {
-     completeValueFromData( subResultIterator, key, ((List) varValueTransformed).getAt( i ).get( key ), pilotAction.get( key ), contextCaseId);
-     }
-     }
-     }
-     else if (varValue == null)
-     {
-     rootResult.put(varName,null);
-     }
-     else
-     {
-     contextCaseId.log( " completeValueFromData.: Value is not a MAP and not a LIST do nothing : "+varValue.getClass().getName());
-     // action is a MAP and the value is not... not, do nothing here
-     }
-     } // end of varcontext as a Map
-     else
-     {
-     contextCaseId.log( " completeValueFromData.: Direct transformation ("+(pilotAction==null ? "data" : pilotAction.toString())+")");
-     rootResult.put(varName, transformValue( varValue, pilotAction==null ? "data" : pilotAction.toString(), contextCaseId) );
-     if (contextCaseId.isLog)
-     {
-     contextCaseId.log( " completeValueFromData. Set in["+varName+"] : ["+rootResult.get(varName)+"]");
-     if (rootResult.get(varName)!=null)
-     {
-     String jsonSt = new JsonBuilder( rootResult.get(varName) ).toPrettyString();
-     // contextCaseId.log( " completeValueFromData. JSON="+jsonSt);
-     }
-     }
-     }
-     // special case for an enum
-     if (varValue instanceof Enum)
-     {
-     List<String> listOptions = new ArrayList<String>();
-     // get the enummeration
-     Object[] options = ((Enum) varValue).values();
-     for ( Object oneOption : options)
-     {
-     listOptions.add( oneOption.toString() );
-     }
-     rootResult.put(varName+"_list", listOptions );
-     }
-     contextCaseId.log( "========================= completeValueFromData.end: Get variable["+varName+"]");
-     }
-     */
+
     /* -------------------------------------------------------------------------------- */
     /*																					*/
     /*	completeValueBdmData															*/
@@ -780,7 +743,8 @@ class RestContextHandleGet implements RestApiController {
             BusinessDataReference businessData,
             RestContextCaseId contextCaseId,
             APIClient apiClient,
-            Map<String,Object> pilotDataMap)
+            Map<String,Object> pilotDataMap,
+            RestContextTrackPerformance trackPerformance)
     {
 
         ProcessAPI processAPI = apiClient.processAPI;
@@ -792,6 +756,7 @@ class RestContextHandleGet implements RestApiController {
         {
 
             // contextCaseId.log("completeValueBdmData.2: Get Business Reference ["+businessData.getName()+"]");
+            Map<String,Object> trackSubOperation = null;
 
             // the result is maybe a HASHMAP or a LIST<HASMAP>
             Object resultBdm = null;
@@ -800,6 +765,7 @@ class RestContextHandleGet implements RestApiController {
             if (businessData instanceof MultipleBusinessDataReference)
             {
                 // this is a multiple data
+                trackSubOperation = trackPerformance.startSubOperation("completeValueBdmData["+businessData.getName()+"] MULTIPLE/ storageId");
 
                 isMultiple=true;
                 contextCaseId.log( "completeValueBdmData.3 Get MULTIPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
@@ -813,6 +779,8 @@ class RestContextHandleGet implements RestApiController {
             }
             if (businessData instanceof SimpleBusinessDataReference)
             {
+                trackSubOperation = trackPerformance.startSubOperation("completeValueBdmData["+businessData.getName()+"] SINGLE / storageId");
+
                 resultBdm = new HashMap<String,Object>();
                 isMultiple=false;
                 contextCaseId.log( "completeValueBdmData.3: Get SIMPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
@@ -821,6 +789,10 @@ class RestContextHandleGet implements RestApiController {
             }
             // logger.info("completeValueBdmData.3bis : Set ["+resultBdm+"] in result");
 
+            if (trackSubOperation!=null)
+                trackPerformance.endSubOperation( trackSubOperation);
+
+            trackSubOperation = trackPerformance.startSubOperation("getProcessBusinessDataReferences["+businessData.getName()+"] / getClass");
 
             String classDAOName = businessData.getType()+"DAO";
             // logger.info("completeValueBdmData.4: Get Business Reference ["+businessData.getName()+"] it's a BDM-type["+businessData.getType()+"] classDao=["+classDAOName+"]");
@@ -837,6 +809,7 @@ class RestContextHandleGet implements RestApiController {
 
 
             BusinessObjectDAO dao = apiClient.getDAO( classDao );
+            trackPerformance.endSubOperation( trackSubOperation);
 
             // logger.info("completeValueBdmData.6:Dao loaded : dao["+ dao +"] listStorageIds["+listStorageIds+"]");
 
@@ -864,7 +837,10 @@ class RestContextHandleGet implements RestApiController {
                 }
                 // logger.info("completeValueBdmData.7: Get Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"] storageId["+storageId+"]");
 
+                trackSubOperation = trackPerformance.startSubOperation("getProcessBusinessDataReferences["+businessData.getName()+"] / findByPersistenceId");
                 Entity dataBdmEntity = dao.findByPersistenceId(storageId);
+                trackPerformance.endSubOperation( trackSubOperation);
+
                 if (dataBdmEntity==null)
                 {
                     contextCaseId.logError( rootResult, "The BDM variable["+businessData.getName()+"] storageId["+storageId+"] does not exist anymore " );
@@ -889,8 +865,9 @@ class RestContextHandleGet implements RestApiController {
                 //				         	 "price":"data"
                 //	  		    }
                 // }
-
-                loadBdmVariableOneLevel(rootResult, saveOneBdm, dataBdmEntity, pilotDataMap.get( businessData.getName() ) );
+                trackSubOperation = trackPerformance.startSubOperation("loadBdmVariableOneLevel");
+                loadBdmVariableOneLevel(rootResult, saveOneBdm, dataBdmEntity, pilotDataMap.get( businessData.getName() ),  contextCaseId );
+                trackPerformance.endSubOperation( trackSubOperation);
 
 
             }
@@ -940,8 +917,11 @@ class RestContextHandleGet implements RestApiController {
     private void loadBdmVariableOneLevel( Map<String,Object> rootResult,
             Map<String,Object> saveLocalLevel,
             Entity dataBdmEntity,
-            Map<String,Object> contextLocalLevel)
+            Map<String,Object> contextLocalLevel,
+            RestContextCaseId contextCaseId)
     {
+        RestContextTransformData restContextTransformData= new RestContextTransformData(contextCaseId);
+
         Class classBdmEntity= dataBdmEntity.getClass();
         // contextCaseId.log( "loadBdmVariableOneLevel.10a ---------loadBdmVariableOneLevel class["+classBdmEntity.getName()+"] contextLocalLevel["+contextLocalLevel.toString()+"]");
 
@@ -1064,7 +1044,7 @@ class RestContextHandleGet implements RestApiController {
                         {
                             Map<String,Object> bdmChild = new HashMap<String,Object>();
                             saveLocalLevel.put(nameAttribute, bdmChild);
-                            loadBdmVariableOneLevel(rootResult, bdmChild, value, contextInfo )
+                            loadBdmVariableOneLevel(rootResult, bdmChild, value, contextInfo, contextCaseId);
                         }
                         if (value instanceof List)
                         {
@@ -1075,13 +1055,13 @@ class RestContextHandleGet implements RestApiController {
                             {
                                 Map<String,Object> bdmChild = new HashMap<String,Object>();
                                 listBdmChild.add( bdmChild );
-                                loadBdmVariableOneLevel(rootResult, bdmChild, valueInList, contextInfo)
+                                loadBdmVariableOneLevel(rootResult, bdmChild, valueInList, contextInfo, contextCaseId);
                             }
 
                         }
                     }
                     else
-                        saveLocalLevel.put(nameAttribute, transformValue( value, contextLocalLevel==null ? null : contextLocalLevel.get( nameAttribute), contextCaseId ));
+                        saveLocalLevel.put(nameAttribute, restContextTransformData.transformSingleValue( nameAttribute, value, contextLocalLevel==null ? null : contextLocalLevel.get( nameAttribute) ));
 
                     // logger.info("loadBdmVariableOneLevel.10c saveOneBdm ="+saveLocalLevel.toString());
 
@@ -1097,58 +1077,6 @@ class RestContextHandleGet implements RestApiController {
 
     protected boolean shouldSkipField(Class<?> fieldType) {
         return fieldType.equals(javassist.util.proxy.MethodHandler.MethodHandler.class);
-    }
-
-    /* -------------------------------------------------------------------------------- */
-    /*																					*/
-    /*	transformValue																	*/
-    /*																					*/
-    /* -------------------------------------------------------------------------------- */
-
-    /**
-     * Transform the value accord
-     */
-    private static SimpleDateFormat sdfDateTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
-    private static SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd");
-
-    private Object transformValue( Object data, String varAction, RestContextCaseId contextCaseId )
-    {
-        if (data==null)
-            return null;
-        if (data instanceof Date)
-        {
-            contextCaseId.log("========= transformValue["+data+"] <date> varAction["+varAction+"]")
-            if ("date".equals(varAction))
-                return sdfDate.format( (Date) data);
-            else if ("datetime".equals(varAction))
-                return sdfDateTime.format( (Date) data);
-            else if ("datelong".equals(varAction))
-                return ((Date) data).getTime();
-
-            // use the default
-            if (contextCaseId.isDateFormatLong() )
-                return ((Date) data).getTime();
-            if (contextCaseId.isDateFormatTime())
-                return sdfDateTime.format( (Date) data);
-            if (contextCaseId.isDateFormatJson() )
-                return sdfDate.format( (Date) data);
-
-            // default : be compatible with the UIDesigner which wait for a timestamp.
-            return ((Date) data).getTime();
-
-        }
-        if (data instanceof List)
-        {
-            contextCaseId.log("========= transformValue["+data+"] <list> varAction["+varAction+"]")
-            List<Object> listTransformed= new ArrayList<Object>();
-            for (Object onItem : ((List) data))
-            {
-                // propagate the varAction to transform the date
-                listTransformed.add( transformValue( onItem, varAction, contextCaseId ));
-            }
-            return listTransformed;
-        }
-        return data;
     }
 
     /* -------------------------------------------------------------------------------- */

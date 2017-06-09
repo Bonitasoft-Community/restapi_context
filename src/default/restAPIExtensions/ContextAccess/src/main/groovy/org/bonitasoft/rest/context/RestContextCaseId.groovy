@@ -1,5 +1,4 @@
 package org.bonitasoft.rest.context
-// package org.bonitasoft.rest.context;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -101,6 +100,8 @@ public class RestContextCaseId {
     public Document document=null;
 
 
+
+
     // different item loaded
     public ProcessDefinition processDefinition=null;
     public ProcessInstance processInstance=null;
@@ -108,6 +109,12 @@ public class RestContextCaseId {
     public ArchivedProcessInstance archivedProcessInstance = null;
     public ArchivedActivityInstance archivedActivityInstance=null;
 
+    /**
+     * when we have a callmap, the task may be a task in the subprocess. In this moment, the scope may be use to decide were the value has to be retrieve.
+     * We save the local information processInstanceParent (of the task) and the processInstanceRoot
+     */
+    ProcessInstance  processInstanceParent = null;
+    ProcessInstance  processInstanceRoot = null;
 
 
     /**
@@ -118,6 +125,16 @@ public class RestContextCaseId {
     };
 
     TypeUrl detectTypeUrl = TypeUrl.UNKNOW;
+
+    /*
+     * specify the scope of the case to search.
+     * - DEFAULT : if this is a caseId, then result is the caseId given. A task ? caseId= case( task ) so maybe the subCaseId
+     * - ROOT : the caseId is force to the root parent
+     */
+    public enum ScopeSearch {  ROOT, DEFAULT};
+    public ScopeSearch scopeSearch = ScopeSearch.DEFAULT;
+
+
 
     Long userId = null;
     ProcessAPI processAPI;
@@ -305,7 +322,22 @@ public class RestContextCaseId {
         contextResult.put("username", user.getUserName());
         contextResult.put("processdefinitionid", processDefinitionId)
         contextResult.put("taskid", taskInstanceId)
-        contextResult.put("caseid", processInstanceId);
+
+        // Ok, here a special situation:
+        // if  processInstanceRoot !=null, then we :
+        //   use the root as caseId (because this is the caseId for the final user)
+        // parentroot is given too, and the processInstance is display too because this is the one use to display the variable
+        if (processInstanceRoot !=null)
+        {
+			if (processInstanceRoot != null)
+            	contextResult.put("caseid", processInstanceRoot.getId());
+			if (processInstanceParent!=null)
+            	contextResult.put("caseidparent", processInstanceParent.getId());
+				
+            contextResult.put("caseiduse", processInstanceId);
+        }
+        else
+            contextResult.put("caseid", processInstanceId);
         if (activityInstance!=null) {
             contextResult.put("taskname", activityInstance.getName());
             contextResult.put("isTaskArchived", false );
@@ -341,7 +373,6 @@ public class RestContextCaseId {
             if (posEqual!=-1)
                 this.parametersMap.put( paramAndValue.substring(0,posEqual),  paramAndValue.substring(posEqual+1));
         }
-        this.pametersRequest = null;
         this.restConfiguration = null;
         internalDecodeParameters();
     }
@@ -435,7 +466,13 @@ public class RestContextCaseId {
         catch(Exception e) {
             analysisString+= "a Boolean is expected for the parameters log ["+getOneParameter("log")+"]";
         }
-
+        if (getOneParameter("scope")!=null)
+        {
+            if (ScopeSearch.ROOT.toString().equals(  getOneParameter("scope")))
+                scopeSearch=ScopeSearch.ROOT;
+            if (ScopeSearch.DEFAULT.toString().equals(  getOneParameter("scope")))
+                scopeSearch=ScopeSearch.DEFAULT;
+        }
         if  ( (detectTypeUrl == TypeUrl.TASKEXECUTION) || (detectTypeUrl == TypeUrl.UNKNOW))
             taskInstanceIdParam = getOneParameterLong("taskId", "Error with taskId");
 
@@ -447,7 +484,7 @@ public class RestContextCaseId {
         {
             initializeFromContentStorageId( contentStorageId );
             analysisString +=";docId["+documentId+"] processInstanceId["+processInstanceId+"]";
-            caseInstanceIdParam= (document==null ? null : document.getId());
+            caseInstanceIdParam= (document==null ? null : document.getProcessInstanceId());
         }
 
         if  ( (detectTypeUrl == TypeUrl.PROCESSINSTANCIATION) || (detectTypeUrl == TypeUrl.UNKNOW))
@@ -461,7 +498,20 @@ public class RestContextCaseId {
             {
                 activityInstance = processAPI.getActivityInstance( taskInstanceIdParam );
                 taskInstanceId =   activityInstance.getId();
-                caseInstanceIdParam = activityInstance.getParentContainerId();
+                // 2 possibiluty ; the getParentContainerId display the local parent, where getRootContainerId display the root caseId
+                // in  case of a subprocess, this is a main difference : variable are not the same ! Actor filter too are different
+                Long parentCaseId= activityInstance.getParentContainerId();
+                Long rootCaseId = activityInstance.getRootContainerId();
+                if (parentCaseId != rootCaseId)
+                {
+                    processInstanceParent = processAPI.getProcessInstance( parentCaseId );
+                    processInstanceRoot = processAPI.getProcessInstance( rootCaseId );
+
+                }
+                if (scopeSearch == ScopeSearch.DEFAULT)
+                    caseInstanceIdParam = parentCaseId;
+                if (scopeSearch == ScopeSearch.ROOT)
+                    caseInstanceIdParam = rootCaseId;
             }
         } catch(Exception e )
         {
@@ -487,11 +537,13 @@ public class RestContextCaseId {
             {
                 processInstance = processAPI.getProcessInstance( caseInstanceIdParam );
                 processInstanceId =   processInstance.getId();
+
                 processDefinitionIdParam = processInstance.getProcessDefinitionId();
             }
         } catch(Exception e )
         {
             // maybe normal : it's archived ?
+            analysisString+="Error with caseInstanceId["+caseInstanceIdParam+"] : "+e.toString();
         };
         try
         {
@@ -504,6 +556,15 @@ public class RestContextCaseId {
         } catch(Exception e )
         {
             analysisString+="Error with caseId["+caseInstanceIdParam+"] : "+e.toString();
+        };
+        // root process instance ?
+        if (processInstance!=null)
+            try
+            {
+                processInstanceRoot= processAPI.getProcessInstance( processInstance.getRootProcessInstanceId() );
+            } catch(Exception e )
+        {
+            analysisString+="No processRoot["+processInstance.getRootProcessInstanceId()+"] : "+e.toString();
         };
 
         // --------------------------------- processAPI
@@ -545,7 +606,7 @@ public class RestContextCaseId {
 
         // now read the defautl date format
         String defaultDateFormatSt = getOneParameter("dateformat");
-        if (defaultDateFormatSt== null || defaultDateFormatSt.trim().length==0)
+        if (defaultDateFormatSt== null || defaultDateFormatSt.trim().length()==0)
         {
             // thanks to KilianStein to propose this configuration way
             defaultDateFormatSt =restConfiguration==null ? null :  restConfiguration.getDefaultDateFormat();
@@ -637,7 +698,7 @@ public class RestContextCaseId {
                 con.close();
         }
         if (documentId!=null) {
-            document  =     processAPI.getDocument(documentId);
+            document  =  processAPI.getDocument(documentId);
         }
         return allIsOk;
     }

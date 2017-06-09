@@ -12,6 +12,7 @@ import java.util.logging.Logger
 import java.util.Map;
 import java.util.StringTokenizer;
 
+
 import javax.servlet.http.HttpServletRequest
 
 
@@ -56,7 +57,6 @@ import org.bonitasoft.engine.search.SearchResult
 // a Case has multiple access : a ProcessInstance or a ArchiveProcessInstance, a TaskInstance or an ArchiveTaskInstance...
 public class RestContextTransformData {
 
-    private static Logger logger = Logger.getLogger("org.bonitasoft.rest.context.RestContextTransformData");
 
     private RestContextCaseId contextCaseId;
 
@@ -73,7 +73,7 @@ public class RestContextTransformData {
      * @param varValue
      * @param pilotDataMap
      */
-    private  void transform( Map<String,Object> rootResult, String completeName,  String varName, Object varValue, Map<String,Object> pilotDataMap, int depth )
+    protected void transform( Map<String,Object> rootResult, String completeName,  String varName, Object varValue, Map<String,Object> pilotDataMap, int depth )
     {
         if (pilotDataMap==null)
             return;
@@ -124,12 +124,12 @@ public class RestContextTransformData {
                     }
                     else
                     {
-                        boolean isAllowed = contextCaseId.getPilot().checkPermissionString(varName, pilotAction.get( key ) );
+                        boolean isAllowed = contextCaseId.getPilot().checkPermissionString( key, pilotAction.get( key ) );
                         trace +=";IsAllow ? "+isAllowed;
                         if (isAllowed)
                         {
-                            subResult.put(key,  transformSingleValue( varValueTransformed.get( key ), pilotAction.get( key )==null ? null : pilotAction.get( key ).toString()  ));
-                            trace+= "; ["+varName+"]=["+subResult.get( varName )+"]";
+                            subResult.put(key,  transformSingleValue( key, varValueTransformed.get( key ), pilotAction.get( key )==null ? null : pilotAction.get( key ).toString()  ));
+                            trace+= "; ["+key+"]=["+subResult.get( varName )+"]";
                         }
                     }
                 }
@@ -175,7 +175,7 @@ public class RestContextTransformData {
             trace +=";IsAllow ? "+isAllowed;
             if (isAllowed)
             {
-                rootResult.put(varName, transformSingleValue( varValue, pilotAction==null ? "data" : pilotAction.toString() ) );
+                rootResult.put(varName, transformSingleValue( varName, varValue, pilotAction==null ? "data" : pilotAction.toString() ) );
                 trace+= "; ["+varName+"]=["+rootResult.get( varName )+"]";
             }
         }
@@ -209,13 +209,16 @@ public class RestContextTransformData {
     /**
      * Transform the value accord
      */
-    private static SimpleDateFormat sdfDateTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+    private static SimpleDateFormat sdfDateTime = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
     private static SimpleDateFormat sdfDate = new SimpleDateFormat("yyyy-MM-dd");
+    private static SimpleDateFormat sdfHourAbsolute = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
 
-    private Object transformSingleValue( Object data, String varAction)
+    private Object transformSingleValue( String varName, Object data, String varAction)
     {
         if (data==null)
             return null;
+        if (varAction==null)
+            varAction="";
 
         // varaction can contain multiple element : the access, and the transform.
         // it maybe :
@@ -229,39 +232,56 @@ public class RestContextTransformData {
         {
             String token = st.nextToken();
             if (token.startsWith("format:"))
-                translatorAction = token.substring("format:".length()+1);
+                translatorAction = token.substring("format:".length());
         }
 
+        Date dataDate=null;
         if (data instanceof Date)
         {
-            logger.info("========= transformValue["+data+"] <date> varAction["+varAction+"]")
+            dataDate= (Date) data;
+        }
+        // JDK 1.8 data type
+        if (data.getClass().getName().equals("java.time.LocalDate")
+        || data.getClass().getName().equals("java.time.OffsetDateTime")
+        || data.getClass().getName().equals("java.time.LocalDateTime"))
+        {
+            return  RestContextTransformData_18.getTimeFromJDK18( varName, data, translatorAction );
+        }
+
+        if (dataDate!=null)
+        {
+            contextCaseId.log( "========= transformSingleValue Name ["+varName+"] Date["+dataDate+"] <date> varAction["+varAction+"]")
             if ("date".equals(translatorAction))
-                return sdfDate.format( (Date) data);
+                return sdfDate.format( dataDate );
             else if ("datetime".equals(translatorAction))
-                return sdfDateTime.format( (Date) data);
+                return sdfDateTime.format( dataDate );
             else if ("datelong".equals(translatorAction))
-                return ((Date) data).getTime();
+                return dataDate.getTime();
+            else if ("absolute".equals(translatorAction))
+                return sdfHourAbsolute.format(dataDate);
 
             // use the default
             if (contextCaseId.isDateFormatLong() )
-                return ((Date) data).getTime();
+                return dataDate.getTime();
             if (contextCaseId.isDateFormatTime())
-                return sdfDateTime.format( (Date) data);
+                return sdfDateTime.format( dataDate);
             if (contextCaseId.isDateFormatJson() )
-                return sdfDate.format( (Date) data);
+                return sdfDate.format( dataDate);
 
             // default : be compatible with the UIDesigner which wait for a timestamp.
-            return ((Date) data).getTime();
+            return dataDate.getTime();
 
         }
+
+
         if (data instanceof List)
         {
-            logger.info("========= transformValue["+data+"] <list> varAction["+varAction+"]")
+            contextCaseId.log( "========= transformSingleValue["+data+"] <list> varAction["+varAction+"]")
             List<Object> listTransformed= new ArrayList<Object>();
             for (Object onItem : ((List) data))
             {
                 // propagate the varAction to transform the date
-                listTransformed.add( transformValue( onItem, varAction, contextCaseId ));
+                listTransformed.add( transformSingleValue( varName, onItem, varAction ));
             }
             return listTransformed;
         }
