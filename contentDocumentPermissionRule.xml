@@ -1,0 +1,19 @@
+<assembly>
+	<id>DocumentPermissionRule</id>
+	<formats>
+		<format>zip</format>
+	</formats>
+	<includeBaseDirectory>false</includeBaseDirectory>
+	<fileSets>
+		<fileSet>
+			<directory>${project.basedir}/src/main/groovy/org/bonitasoft/rest/context</directory>
+			<outputDirectory>/</outputDirectory>
+			<includes>
+				<include>**/*</include>
+			</includes>
+            <excludes>
+                <exclude>**/RestContextHandleGet.groovy</exclude>
+            </excludes>
+		</fileSet>
+	</fileSets>
+</assembly>
