@@ -4,7 +4,6 @@
 
     <groupId>org.bonitasoft.rest.context</groupId>
     <artifactId>ContextAccess</artifactId>
-    <packaging>pom</packaging>
     <version>2.8</version>
     <name>Context Access</name>
     <description>Get context access</description>
@@ -12,9 +11,9 @@
     <properties>
         <bonita.version>7.2.2</bonita.version>
         <groovy.version>2.4.4</groovy.version>
-        <slf4j.version>1.6.1</slf4j.version>
         <json-simple.version>1.1</json-simple.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <document-permission-rule.name>DocumentPermissionRule</document-permission-rule.name>
     </properties>
 
     <dependencies>
@@ -31,12 +30,6 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
             <groupId>com.googlecode.json-simple</groupId>
             <artifactId>json-simple</artifactId>
             <version>${json-simple.version}</version>
@@ -47,12 +40,12 @@
         <finalName>${project.artifactId}</finalName>
         <resources>
             <resource>
-                <directory>../src/main/resources</directory>
+                <directory>src/main/resources</directory>
             </resource>
         </resources>
 
-        <sourceDirectory>../src/main/groovy</sourceDirectory>
-        <testSourceDirectory>../src/test/groovy</testSourceDirectory>
+        <sourceDirectory>src/main/groovy</sourceDirectory>
+        <testSourceDirectory>src/test/groovy</testSourceDirectory>
 
         <plugins>
             <plugin>
@@ -60,8 +53,8 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.3</version>
                 <configuration>
-                    <source>1.7</source>
-                    <target>1.7</target>
+                    <source>1.8</source>
+                    <target>1.8</target>
                     <compilerId>groovy-eclipse-compiler</compilerId>
                 </configuration>
                 <dependencies>
@@ -78,12 +71,48 @@
                 </dependencies>
             </plugin>
             <plugin>
+                <groupId>com.google.code.maven-replacer-plugin</groupId>
+                <artifactId>replacer</artifactId>
+                <version>1.5.2</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>replace</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <preserveDir>true</preserveDir>
+                    <outputBasedir>target/assembly</outputBasedir>
+                    <outputDir>${document-permission-rule.name}-${project.version}</outputDir>
+                    <basedir>src/main/groovy/org/bonitasoft/rest/context</basedir>
+                    <filesToInclude>
+                        RestContextCaseId.groovy,
+                        RestContextCheckDocumentDownload.groovy,
+                        DocumentPermissionContextRule.groovy,
+                        RestContextConfiguration.groovy,
+                        RestContextPilot.groovy,
+                        RestContextTrackPerformance.groovy,
+                    </filesToInclude>
+                    <includes>
+                        <include>src/**/RestContextCaseId.groovy</include>
+                    </includes>
+                    <replacements>
+                        <replacement>
+                            <token><![CDATA[package org.bonitasoft.rest.context;]]></token>
+                            <value></value>
+                        </replacement>
+                    </replacements>
+                </configuration>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>2.4.1</version>
                 <executions>
                     <execution>
-                        <id>page-content</id>
+                        <id>ContextAccessZip</id>
                         <phase>package</phase>
                         <goals>
                             <goal>single</goal>
@@ -94,23 +123,23 @@
                             <ignoreDirFormatExtensions>true</ignoreDirFormatExtensions>
                             <appendAssemblyId>false</appendAssemblyId>
                             <descriptors>
-                                <descriptor>contentContextAccess.xml</descriptor>
+                                <descriptor>assemblyContextAccessZip.xml</descriptor>
                             </descriptors>
                         </configuration>
                     </execution>
                     <execution>
-                        <id>DocumentPermissionRule</id>
+                        <id>DocumentPermissionRuleZip</id>
                         <phase>package</phase>
                         <goals>
                             <goal>single</goal>
                         </goals>
                         <inherited>false</inherited>
                         <configuration>
-                            <finalName>DocumentPermissionRule-${project.version}</finalName>
+                            <finalName>${document-permission-rule.name}-${project.version}</finalName>
                             <ignoreDirFormatExtensions>true</ignoreDirFormatExtensions>
                             <appendAssemblyId>false</appendAssemblyId>
                             <descriptors>
-                                <descriptor>contentDocumentPermissionRule.xml</descriptor>
+                                <descriptor>assemblyDocumentPermissionRuleZip.xml</descriptor>
                             </descriptors>
                         </configuration>
                     </execution>

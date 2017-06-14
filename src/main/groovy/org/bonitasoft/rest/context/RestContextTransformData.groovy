@@ -1,9 +1,9 @@
-package org.bonitasoft.rest.context
-// package org.bonitasoft.rest.context;
-import java.text.SimpleDateFormat
+package org.bonitasoft.rest.context;
 
-import groovy.json.JsonBuilder
-import groovy.json.JsonSlurper
+import java.text.SimpleDateFormat;
+
+import groovy.json.JsonBuilder;
+import groovy.json.JsonSlurper;
 
 /* ******************************************************************************** */
 /*                                                                                                                                                                  */

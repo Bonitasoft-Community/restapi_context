@@ -1,43 +1,43 @@
-package org.bonitasoft.rest.context
+package org.bonitasoft.rest.context;
 
-import groovy.json.JsonBuilder
-import groovy.json.JsonException
+import groovy.json.JsonBuilder;
+import groovy.json.JsonException;
 
-import java.lang.reflect.Field
-import java.lang.reflect.Method
-import java.util.logging.Logger
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.logging.Logger;
 
-import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
-import org.apache.http.HttpHeaders
-import org.bonitasoft.engine.api.APIClient
-import org.bonitasoft.engine.api.BusinessDataAPI
-import org.bonitasoft.engine.api.IdentityAPI
-import org.bonitasoft.engine.api.ProcessAPI
-import org.bonitasoft.engine.api.ProfileAPI
-import org.bonitasoft.engine.bdm.Entity
-import org.bonitasoft.engine.bdm.dao.BusinessObjectDAO
-import org.bonitasoft.engine.bpm.data.ArchivedDataInstance
-import org.bonitasoft.engine.bpm.data.ArchivedDataNotFoundException
-import org.bonitasoft.engine.bpm.data.DataInstance
-import org.bonitasoft.engine.bpm.data.DataNotFoundException
-import org.bonitasoft.engine.bpm.document.Document
-import org.bonitasoft.engine.bpm.document.DocumentCriterion
-import org.bonitasoft.engine.bpm.document.DocumentDefinition
-import org.bonitasoft.engine.bpm.document.DocumentListDefinition
-import org.bonitasoft.engine.bpm.flownode.FlowElementContainerDefinition
-import org.bonitasoft.engine.bpm.parameter.ParameterCriterion
-import org.bonitasoft.engine.bpm.parameter.ParameterInstance
-import org.bonitasoft.engine.bpm.process.DesignProcessDefinition
-import org.bonitasoft.engine.business.data.BusinessDataReference
-import org.bonitasoft.engine.business.data.MultipleBusinessDataReference
-import org.bonitasoft.engine.business.data.SimpleBusinessDataReference
-import org.bonitasoft.engine.session.APISession
-import org.bonitasoft.web.extension.rest.RestAPIContext
-import org.bonitasoft.web.extension.rest.RestApiController
-import org.bonitasoft.web.extension.rest.RestApiResponse
-import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
+import org.apache.http.HttpHeaders;
+import org.bonitasoft.engine.api.APIClient;
+import org.bonitasoft.engine.api.BusinessDataAPI;
+import org.bonitasoft.engine.api.IdentityAPI;
+import org.bonitasoft.engine.api.ProcessAPI;
+import org.bonitasoft.engine.api.ProfileAPI;
+import org.bonitasoft.engine.bdm.Entity;
+import org.bonitasoft.engine.bdm.dao.BusinessObjectDAO;
+import org.bonitasoft.engine.bpm.data.ArchivedDataInstance;
+import org.bonitasoft.engine.bpm.data.ArchivedDataNotFoundException;
+import org.bonitasoft.engine.bpm.data.DataInstance;
+import org.bonitasoft.engine.bpm.data.DataNotFoundException;
+import org.bonitasoft.engine.bpm.document.Document;
+import org.bonitasoft.engine.bpm.document.DocumentCriterion;
+import org.bonitasoft.engine.bpm.document.DocumentDefinition;
+import org.bonitasoft.engine.bpm.document.DocumentListDefinition;
+import org.bonitasoft.engine.bpm.flownode.FlowElementContainerDefinition;
+import org.bonitasoft.engine.bpm.parameter.ParameterCriterion;
+import org.bonitasoft.engine.bpm.parameter.ParameterInstance;
+import org.bonitasoft.engine.bpm.process.DesignProcessDefinition;
+import org.bonitasoft.engine.business.data.BusinessDataReference;
+import org.bonitasoft.engine.business.data.MultipleBusinessDataReference;
+import org.bonitasoft.engine.business.data.SimpleBusinessDataReference;
+import org.bonitasoft.engine.session.APISession;
+import org.bonitasoft.web.extension.rest.RestAPIContext;
+import org.bonitasoft.web.extension.rest.RestApiController;
+import org.bonitasoft.web.extension.rest.RestApiResponse;
+import org.bonitasoft.web.extension.rest.RestApiResponseBuilder;
 
 
 /**

@@ -1,11 +1,11 @@
-package org.bonitasoft.rest.context
-// package org.bonitasoft.rest.context;
+package org.bonitasoft.rest.context;
+
 import java.util.logging.Logger;
 
 import org.bonitasoft.engine.api.IdentityAPI;
 import org.bonitasoft.engine.api.ProcessAPI;
 import org.bonitasoft.engine.api.ProfileAPI;
-import org.bonitasoft.engine.bpm.document.Document
+import org.bonitasoft.engine.bpm.document.Document;
 
 /* ******************************************************************************** */
 /*                                                                                                                                                                  */

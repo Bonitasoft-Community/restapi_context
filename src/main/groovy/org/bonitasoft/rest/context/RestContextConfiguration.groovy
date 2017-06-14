@@ -1,5 +1,4 @@
-package org.bonitasoft.rest.context
-// package org.bonitasoft.rest.context;
+package org.bonitasoft.rest.context;
 
 
 

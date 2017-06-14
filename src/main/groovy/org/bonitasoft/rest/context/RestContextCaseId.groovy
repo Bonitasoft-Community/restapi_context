@@ -1,31 +1,31 @@
-package org.bonitasoft.rest.context
+package org.bonitasoft.rest.context;
 
 import javax.servlet.http.HttpServletRequest
 
 
 
 
-import org.bonitasoft.engine.api.IdentityAPI
-import org.bonitasoft.engine.api.ProcessAPI
-import org.bonitasoft.engine.api.ProfileAPI
-import org.bonitasoft.engine.bpm.document.Document
-import org.bonitasoft.engine.bpm.flownode.ActivityInstance
-import org.bonitasoft.engine.bpm.flownode.ArchivedActivityInstance
-import org.bonitasoft.engine.bpm.flownode.HumanTaskInstance
-import org.bonitasoft.engine.bpm.process.ArchivedProcessInstance
-import org.bonitasoft.engine.bpm.process.ProcessInstance
+import org.bonitasoft.engine.api.IdentityAPI;
+import org.bonitasoft.engine.api.ProcessAPI;
+import org.bonitasoft.engine.api.ProfileAPI;
+import org.bonitasoft.engine.bpm.document.Document;
+import org.bonitasoft.engine.bpm.flownode.ActivityInstance;
+import org.bonitasoft.engine.bpm.flownode.ArchivedActivityInstance;
+import org.bonitasoft.engine.bpm.flownode.HumanTaskInstance;
+import org.bonitasoft.engine.bpm.process.ArchivedProcessInstance;
+import org.bonitasoft.engine.bpm.process.ProcessInstance;
 import org.bonitasoft.engine.bpm.process.ProcessDefinition;
-import org.bonitasoft.engine.identity.User
-import org.bonitasoft.engine.identity.UserSearchDescriptor
-import org.bonitasoft.engine.bpm.document.DocumentsSearchDescriptor
-import org.bonitasoft.engine.profile.Profile
-import org.bonitasoft.engine.search.SearchOptionsBuilder
-import org.bonitasoft.engine.search.SearchResult
+import org.bonitasoft.engine.identity.User;
+import org.bonitasoft.engine.identity.UserSearchDescriptor;
+import org.bonitasoft.engine.bpm.document.DocumentsSearchDescriptor;
+import org.bonitasoft.engine.profile.Profile;
+import org.bonitasoft.engine.search.SearchOptionsBuilder;
+import org.bonitasoft.engine.search.SearchResult;
 
-import java.sql.Connection
+import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet
-import java.util.logging.Logger
+import java.sql.ResultSet;
+import java.util.logging.Logger;
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.sql.DataSource;

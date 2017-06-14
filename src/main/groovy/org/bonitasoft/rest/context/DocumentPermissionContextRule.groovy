@@ -1,17 +1,17 @@
-package org.bonitasoft.rest.context
+package org.bonitasoft.rest.context;
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import org.bonitasoft.engine.api.APIAccessor
-import org.bonitasoft.engine.api.IdentityAPI
-import org.bonitasoft.engine.api.ProcessAPI
-import org.bonitasoft.engine.api.ProfileAPI
-import org.bonitasoft.engine.api.permission.APICallContext
-import org.bonitasoft.engine.api.permission.PermissionRule
-import org.bonitasoft.engine.exception.BonitaException
-import org.bonitasoft.engine.exception.NotFoundException
-import org.bonitasoft.engine.session.APISession
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bonitasoft.engine.api.APIAccessor;
+import org.bonitasoft.engine.api.IdentityAPI;
+import org.bonitasoft.engine.api.ProcessAPI;
+import org.bonitasoft.engine.api.ProfileAPI;
+import org.bonitasoft.engine.api.permission.APICallContext;
+import org.bonitasoft.engine.api.permission.PermissionRule;
+import org.bonitasoft.engine.exception.BonitaException;
+import org.bonitasoft.engine.exception.NotFoundException;
+import org.bonitasoft.engine.session.APISession;
 
-import java.util.logging.Logger
+import java.util.logging.Logger;
 
 /**
  * Copyright (C) 2014 BonitaSoft S.A.
