@@ -39,13 +39,18 @@ public class RestContextCheckDocumentDownload {
      * BOOLEAN.FALSE : it's not allowed
      */
     public Boolean isAllowedFromPermission( String queryString  ) {
+      	RestContextTrackPerformance trackPerformance = new RestContextTrackPerformance();
+        trackPerformance.addMarker("start");
+    
         RestContextCaseId contextCaseId;
         RestContextPilot pilot = new RestContextPilot();
         contextCaseId = new RestContextCaseId( userId, processAPI, identityAPI,  profileAPI);
         contextCaseId.setPilot(  pilot  );
 
+  		pilot.setContextCaseId(contextCaseId, trackPerformance );
+
         contextCaseId.decodeParametersFromQueryString( queryString );
-        pilot.decodeParameters( contextCaseId );
+        pilot.decodeParameters();
 
         if (!pilot.isPilotDetected()) {
             return null;
@@ -62,14 +67,14 @@ public class RestContextCheckDocumentDownload {
 
         try {
             if ((contextCaseId.contentStorageId !=null) && (contextCaseId.document  == null)) {
-                contextCaseId.logRest("contentStorageId["+contextCaseId.contentStorageId+"] detected but no document :  NOT ALLOWED");
+                contextCaseId.log("contentStorageId["+contextCaseId.contentStorageId+"] detected but no document :  NOT ALLOWED");
                 return false;
             }
             if (contextCaseId.document!=null) {
 
                 String docName = contextCaseId.document.getName();
                 boolean isAllowed= contextCaseId.isAllowVariableName( docName );
-                contextCaseId.logRest("contentStorageId["+contextCaseId.contentStorageId+"] docName["+ docName+"] allow on this variable ? "+isAllowed+"]");
+                contextCaseId.log("contentStorageId["+contextCaseId.contentStorageId+"] docName["+ docName+"] allow on this variable ? "+isAllowed+"]");
                 return isAllowed;
             }
         }

@@ -5,6 +5,7 @@ import javax.servlet.http.HttpServletRequest
 
 
 
+
 import org.bonitasoft.engine.api.IdentityAPI;
 import org.bonitasoft.engine.api.ProcessAPI;
 import org.bonitasoft.engine.api.ProfileAPI;
@@ -19,6 +20,7 @@ import org.bonitasoft.engine.identity.User;
 import org.bonitasoft.engine.identity.UserSearchDescriptor;
 import org.bonitasoft.engine.bpm.document.DocumentsSearchDescriptor;
 import org.bonitasoft.engine.profile.Profile;
+import org.bonitasoft.engine.profile.ProfileCriterion;
 import org.bonitasoft.engine.search.SearchOptionsBuilder;
 import org.bonitasoft.engine.search.SearchResult;
 
@@ -26,6 +28,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.util.logging.Logger;
+
 import javax.naming.Context;
 import javax.naming.InitialContext;
 import javax.sql.DataSource;
@@ -70,6 +73,10 @@ public class RestContextCaseId {
 
     public Long taskInstanceId = null;
     public Long processInstanceId = null;
+	/* where the processInstance is archive, then the processInstanceId is the new ID (id changed); so the activeProcessInstanceId is the 
+	 * ID when it was active. This ID is the one use in a BDM if we link with it, or to access the document for example)
+	 */
+	public Long activeProcessInstanceId=null;
     public Long processDefinitionId = null;
     public Long contentStorageId=null;
     public Long documentId=null;
@@ -85,6 +92,7 @@ public class RestContextCaseId {
     public ArchivedProcessInstance archivedProcessInstance = null;
     public ArchivedActivityInstance archivedActivityInstance=null;
 
+	public StringBuffer bufferLog= new StringBuffer();
     /**
      * when we have a callmap, the task may be a task in the subprocess. In this moment, the scope may be use to decide were the value has to be retrieve.
      * We save the local information processInstanceParent (of the task) and the processInstanceRoot
@@ -116,7 +124,7 @@ public class RestContextCaseId {
     ProcessAPI processAPI;
     IdentityAPI identityAPI;
     ProfileAPI profileAPI;
-
+	
 
     /** describe the current analysis */
     String analysisString;
@@ -128,7 +136,8 @@ public class RestContextCaseId {
 
     boolean isLog=false;
     Boolean isLogFromParameter=null;
-
+	public String allowContextAnalysis;
+	
 
     public RestContextCaseId( Long userId, ProcessAPI processAPI, IdentityAPI identityAPI,  ProfileAPI profileAPI)
     {
@@ -147,7 +156,20 @@ public class RestContextCaseId {
             return processDefinition.getId();
     }
 
-
+    public Long getCaseId()
+    {
+    	if (processInstanceRoot !=null)
+    		return processInstanceRoot.getId();
+    	// manage the archive point of view
+		if (activeProcessInstanceId!=null)
+			return  activeProcessInstanceId;
+		return processInstanceId;
+	}
+	
+    public Long getTaskId()
+    {
+    	return taskInstanceId;
+    }
 
     public isDateFormatLong()
     {
@@ -211,8 +233,14 @@ public class RestContextCaseId {
      */
     public boolean isAllowContext()
     {
-        if (isAdministratorUser())
+		allowContextAnalysis="";
+        if (isAdministratorUser() || isSupervisorUser())
         {
+			if (isAdministratorUser())
+				allowContextAnalysis+="Administrator;";
+			if (isSupervisorUser())
+				allowContextAnalysis+="Supervisor;";
+
             return true;
         }
 
@@ -222,6 +250,7 @@ public class RestContextCaseId {
         if ( (activityInstance!=null) && (activityInstance instanceof HumanTaskInstance))
         {
             if ( (activityInstance.assigneeId > 0) && (activityInstance.assigneeId == userId)) {
+				allowContextAnalysis+="AssignedOnTask;";
                 return true;
             }
             // still possible if user is a candidate
@@ -229,20 +258,32 @@ public class RestContextCaseId {
             builder.filter(UserSearchDescriptor.USER_NAME, user.getUserName() );
             SearchResult searchResult = processAPI.searchUsersWhoCanExecutePendingHumanTask( activityInstance.getId(), builder.done())
             if (searchResult.getCount() == 1) {
+				allowContextAnalysis+="UsersWhoCanExecutePendingHumanTask;";				
                 return true;
             }
             // sorry, you are not involved in this task
+			allowContextAnalysis+="*NOT*:NotInvolvedInTask;";
+			
             return false;
         }
 
         if (processInstance !=null)
         {
             boolean isInvolved = processAPI.isInvolvedInProcessInstance(userId, processInstance.getId())
+			if (isInvolved)
+				allowContextAnalysis+="InvolvedInProcessInstance;";
+			else
+				allowContextAnalysis+="*NOT*:InvolvedInProcessInstance;";				
             return isInvolved;
         }
         if (archivedProcessInstance !=null)
         {
-            boolean isInvolved = processAPI.isInvolvedInProcessInstance(userId, archivedProcessInstance.getId())
+            boolean isInvolved = processAPI.isInvolvedInProcessInstance(userId, archivedProcessInstance.getSourceObjectId())
+			if (isInvolved)
+				allowContextAnalysis+="InvolvedInArchivedProcessInstance;";
+			else
+				allowContextAnalysis+="*NOT*:InvolvedInArchivedProcessInstance;";				
+				
             return isInvolved;
 
         }
@@ -254,15 +295,21 @@ public class RestContextCaseId {
             SearchOptionsBuilder searchOptionBuilder = new SearchOptionsBuilder(0, 10);
             searchOptionBuilder.filter(UserSearchDescriptor.USER_NAME, user.getUserName());
             SearchResult<User> listUsers = processAPI.searchUsersWhoCanStartProcessDefinition(processDefinitionId, searchOptionBuilder.done());
+			if (listUsers.getCount()==1)
+				allowContextAnalysis+="UserWhoCanStartProcessDefinition;";
+			else
+				allowContextAnalysis+="*NOT*UserWhoCanStartProcessDefinition;";
             return  listUsers.getCount() == 1;
         }
         // no real context, return yes
+		allowContextAnalysis+="*NoRealContext;";
+		
         return true;
     }
 
 
     public boolean isAdministratorUser(){
-        List<Profile> listProfiles=profileAPI.getProfilesForUser(   userId );
+        List<Profile> listProfiles=profileAPI.getProfilesForUser( userId,0,10000,ProfileCriterion.NAME_ASC );
         for (Profile profile : listProfiles)
         {
             if (profile.getName().equals("Administrator"))
@@ -271,11 +318,42 @@ public class RestContextCaseId {
         return false;
     }
 
+	public boolean isSupervisorUser()
+	{
+		if (processDefinitionId ==null)
+			return false;
+		return processAPI.isUserProcessSupervisor(processDefinitionId, userId);
+	}
     /* -------------------------------------------------------------------------------- */
     /*                                                                                  */
     /*  Complete the result                                                                        */
     /*                                                                                  */
     /* -------------------------------------------------------------------------------- */
+	
+	public boolean isProcessOverview()
+	{
+		return Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.CASEOVERVIEW);
+	}
+	public boolean isProcessInstanciation()
+	{
+		return Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.PROCESSINSTANCIATION );
+	}
+	public boolean isTaskExecution()
+	{
+		return Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.TASKEXECUTION);
+	}
+	public boolean isCaseArchived()
+	{
+		return archivedProcessInstance !=null;
+	}
+	public isCaseAccess()
+	{
+		if (isProcessOverview() || isProcessInstanciation() || isTaskExecution() || isCaseArchived())
+			return false;
+		if (processInstanceRoot!=null)
+			return true;
+		return false;
+	}
     /**
      *  contextResult
      *
@@ -284,15 +362,25 @@ public class RestContextCaseId {
     public void completeResult(Map<String,Object> contextResult )
     {
         // process initialisation ?
-        contextResult.put("isProcessInstanciation", Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.PROCESSINSTANCIATION ) );
-        contextResult.put("isProcessOverview", Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.CASEOVERVIEW));
-        contextResult.put("isTaskExecution", Boolean.valueOf( detectTypeUrl == RestContextCaseId.TypeUrl.TASKEXECUTION));
+        contextResult.put("isProcessInstanciation", isProcessInstanciation() );
+        contextResult.put("isProcessOverview", isProcessOverview() );
+        contextResult.put("isTaskExecution", isTaskExecution());
 
 
         // is this user is an administrator ?
         contextResult.put("isAdministrator", isAdministratorUser());
-        contextResult.put("isCaseArchived", archivedProcessInstance !=null );
+		contextResult.put("isSupervisor", isSupervisorUser());
+		
+        contextResult.put("isCaseArchived", isCaseArchived() );
 
+		if (isLog)
+		{ 
+			contextResult.put("allowContext", allowContextAnalysis );
+			if (isAdministratorUser() || isSupervisorUser())
+				contextResult.put("log", bufferLog.toString() );
+		}
+		
+		
         User user =identityAPI.getUser( userId );
         contextResult.put("userid", user.getId());
         contextResult.put("username", user.getUserName());
@@ -305,15 +393,24 @@ public class RestContextCaseId {
         // parentroot is given too, and the processInstance is display too because this is the one use to display the variable
         if (processInstanceRoot !=null)
         {
-			if (processInstanceRoot != null)
-            	contextResult.put("caseid", processInstanceRoot.getId());
+           	contextResult.put("caseid", processInstanceRoot.getId());
 			if (processInstanceParent!=null)
             	contextResult.put("caseidparent", processInstanceParent.getId());
 				
             contextResult.put("caseiduse", processInstanceId);
         }
         else
-            contextResult.put("caseid", processInstanceId);
+		{
+			// manage the archive point of view
+			if (activeProcessInstanceId!=null)
+			{
+				contextResult.put("caseid", activeProcessInstanceId);
+				contextResult.put("archivedcaseid", processInstanceId);
+				
+			}
+			else
+				contextResult.put("caseid", processInstanceId);
+		}
         if (activityInstance!=null) {
             contextResult.put("taskname", activityInstance.getName());
             contextResult.put("isTaskArchived", false );
@@ -478,6 +575,8 @@ public class RestContextCaseId {
                 // in  case of a subprocess, this is a main difference : variable are not the same ! Actor filter too are different
                 Long parentCaseId= activityInstance.getParentContainerId();
                 Long rootCaseId = activityInstance.getRootContainerId();
+                // we branch the caseInstance to the ROOT one 
+                caseInstanceIdParam= rootCaseId;
                 if (parentCaseId != rootCaseId)
                 {
                     processInstanceParent = processAPI.getProcessInstance( parentCaseId );
@@ -527,6 +626,7 @@ public class RestContextCaseId {
             {
                 archivedProcessInstance = processAPI.getFinalArchivedProcessInstance( caseInstanceIdParam );
                 processInstanceId =   archivedProcessInstance.getId();
+				activeProcessInstanceId= archivedProcessInstance.getSourceObjectId();
                 processDefinitionIdParam = archivedProcessInstance.getProcessDefinitionId();
             }
         } catch(Exception e )
@@ -561,15 +661,18 @@ public class RestContextCaseId {
 
 
         // ------------- detect the typeUrl
-
-        if (processInstance == null && archivedProcessInstance==null && processDefinitionId!=null && (detectTypeUrl != TypeUrl.CASEOVERVIEW))
-        {
-            // logger.info(" processInstance/archived=["+processInstance+"/"+archivedProcessInstance+"] taskId["+taskInstanceId+"] isProcessInstanciation="+isProcessInstanciation+", isProcessOverview="+isProcessOverwiew+", isTaskExecution="+isTaskExecution);
-            detectTypeUrl = TypeUrl.PROCESSINSTANCIATION;
-        }
         if (activityInstance != null)
         {
             detectTypeUrl= TypeUrl.TASKEXECUTION;
+        }
+        else if (processInstance != null || archivedProcessInstance!=null)
+        {
+            detectTypeUrl= TypeUrl.CASEOVERVIEW;
+        }
+        else if (processDefinitionId!=null)
+        {
+            // logger.info(" processInstance/archived=["+processInstance+"/"+archivedProcessInstance+"] taskId["+taskInstanceId+"] isProcessInstanciation="+isProcessInstanciation+", isProcessOverview="+isProcessOverwiew+", isTaskExecution="+isTaskExecution);
+            detectTypeUrl = TypeUrl.PROCESSINSTANCIATION;
         }
 
 
@@ -616,7 +719,7 @@ public class RestContextCaseId {
 
         }
         analysisString +=trace();
-        log( analysisString );
+        // log( analysisString );
 
     } // end decodesParameters
 
@@ -689,13 +792,31 @@ public class RestContextCaseId {
     public void log( String logExplanation)
     {
         if (isLog)
-            logger.severe("com.bonitasoft.rest.context: "+logExplanation);
+        { 
+            logger.info("org.bonitasoft.rest.context: "+logExplanation);
+            bufferLog.append(logExplanation+";");
+        }
     }
-
+    public void logWithPrefix( String logPrefix, String logExplanation)
+    {
+        if (isLog)
+        { 
+            logger.info("org.bonitasoft.rest.context: "+logPrefix+logExplanation);
+            bufferLog.append(logExplanation+";");
+        }
+    }
+    public void logNoBuffer(String logExplanation)
+    {
+    	 if (isLog)
+         { 
+             logger.info("org.bonitasoft.rest.context: "+logExplanation);
+         }
+    }
     // report an error
     private void logError(Map<String,Object> rootResult, String logExplanation )
     {
-        logger.severe("com.bonitasoft.rest.context: "+logExplanation);
+        logger.severe("org.bonitasoft.rest.context: "+logExplanation);
+        bufferLog.append("ERROR:"+logExplanation);
         String error = rootResult.get("error");
         if (error!=null)
             error+=";"+logExplanation;

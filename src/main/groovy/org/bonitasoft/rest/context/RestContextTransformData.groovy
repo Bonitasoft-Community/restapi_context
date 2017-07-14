@@ -52,6 +52,7 @@ public class RestContextTransformData {
             return ; // too deep
         }
 
+		// syntheticTrace to be in the buffer 
         String trace="                                                        ".substring(0,depth);
 
         trace += " transform. variable["+varName+"] pilotDataMap["+pilotDataMap.toString()+"]";
@@ -111,7 +112,7 @@ public class RestContextTransformData {
                     subResult.add(subResultIterator);
                     for (String key : pilotAction.keySet())
                     {
-                        contextCaseId.log( trace+" intermediate" );
+                        // contextCaseId.log( trace+" intermediate" );
                         transform( subResultIterator, completeName+"."+key, key, ((List) varValueTransformed).getAt( i ).get( key ), pilotAction, depth+1 );
                     }
                     trace+= "; subResult="+subResult.toString();
@@ -127,7 +128,7 @@ public class RestContextTransformData {
             else
             {
                 trace+= ";DATA unknow ["+varValue.getClass().getName()+"]";
-                contextCaseId.log( " completeValueFromData.: Value is not a MAP and not a LIST do nothing : "+varValue.getClass().getName());
+                contextCaseId.logWithPrefix( " completeValueFromData.: ","Value is not a MAP and not a LIST do nothing : "+varValue.getClass().getName());
                 // action is a MAP and the value is not... not, do nothing here
             }
         } // end of varcontext as a Map
@@ -160,7 +161,7 @@ public class RestContextTransformData {
             trace+= " add["+varName+"_list]=  ["+rootResult.get(varName+"_list")+"]";
 
         }
-        contextCaseId.log( trace);
+        contextCaseId.logNoBuffer( trace );
 
     }
 
@@ -180,9 +181,8 @@ public class RestContextTransformData {
 
     private Object transformSingleValue( String varName, Object data, String varAction)
     {
-        if (data==null)
-            return null;
-        if (varAction==null)
+		// if data is null, accept : maybe the action contains a default ?
+          if (varAction==null)
             varAction="";
 
         // varaction can contain multiple element : the access, and the transform.
@@ -192,12 +192,15 @@ public class RestContextTransformData {
         // example :
         // "date"    "datetime"    "transform:date"   "initiator;transform:datetime";
         String translatorAction=varAction; // default, for ascendent compatibilty
+		String defaultAction=null;
         StringTokenizer st = new StringTokenizer( varAction, ";");
         while (st.hasMoreTokens())
         {
             String token = st.nextToken();
-            if (token.startsWith("format:"))
-                translatorAction = token.substring("format:".length());
+            if (token.startsWith(RestContextPilot.cstActionFormat))
+                translatorAction = token.substring(RestContextPilot.cstActionFormat.length());
+            if (token.startsWith(RestContextPilot.cstActionDefault))
+                defaultAction = token.substring(RestContextPilot.cstActionDefault.length());
         }
 
         Date dataDate=null;
@@ -205,24 +208,29 @@ public class RestContextTransformData {
         {
             dataDate= (Date) data;
         }
+		if (data==null)
+		{
+			data= defaultAction;
+		}
         // JDK 1.8 data type
-        if (data.getClass().getName().equals("java.time.LocalDate")
-        || data.getClass().getName().equals("java.time.OffsetDateTime")
-        || data.getClass().getName().equals("java.time.LocalDateTime"))
+        if (data!=null && 
+			(data.getClass().getName().equals("java.time.LocalDate")
+				|| data.getClass().getName().equals("java.time.OffsetDateTime")
+				|| data.getClass().getName().equals("java.time.LocalDateTime"))
+			)
         {
             return  RestContextTransformData_18.getTimeFromJDK18( varName, data, translatorAction );
         }
-
-        if (dataDate!=null)
+	    if (dataDate!=null)
         {
-            contextCaseId.log( "========= transformSingleValue Name ["+varName+"] Date["+dataDate+"] <date> varAction["+varAction+"]")
-            if ("date".equals(translatorAction))
+            contextCaseId.logWithPrefix( "========= transformSingleValue Name ["+varName+"]", " Date["+dataDate+"] <date> varAction["+varAction+"]")
+            if (RestContextPilot.cstActionFormatDate.equals(translatorAction))
                 return sdfDate.format( dataDate );
-            else if ("datetime".equals(translatorAction))
+            else if (RestContextPilot.cstActionFormatDateTime.equals(translatorAction))
                 return sdfDateTime.format( dataDate );
-            else if ("datelong".equals(translatorAction))
+            else if (RestContextPilot.cstActionFormatDateLong.equals(translatorAction))
                 return dataDate.getTime();
-            else if ("absolute".equals(translatorAction))
+            else if (RestContextPilot.cstActionFormatDateAbsolute.equals(translatorAction))
                 return sdfHourAbsolute.format(dataDate);
 
             // use the default
@@ -239,7 +247,7 @@ public class RestContextTransformData {
         }
 
 
-        if (data instanceof List)
+        if (data!=null && data instanceof List)
         {
             contextCaseId.log( "========= transformSingleValue["+data+"] <list> varAction["+varAction+"]")
             List<Object> listTransformed= new ArrayList<Object>();

@@ -77,14 +77,14 @@ public class RestContextTransformData_18
         {
             java.time.OffsetDateTime dataLocalDate = (java.time.OffsetDateTime) data;
 
-            if ("absolute".equals(translatorAction))
+            if (RestContextPilot.cstActionFormatDateAbsolute.equals(translatorAction))
                 return dtfHourAbsolute.format(dataLocalDate);
             return dtfHour.format(dataLocalDate);
         }
         if (data.getClass().getName().equals("java.time.LocalDateTime"))
         {
             java.time.LocalDateTime dataLocalDate = (java.time.LocalDateTime) data;
-            if ("absolute".equals(translatorAction))
+            if (RestContextPilot.cstActionFormatDateAbsolute.equals(translatorAction))
                 return dtfHourAbsolute.format(dataLocalDate);
             return dtfHour.format(dataLocalDate);
         }
