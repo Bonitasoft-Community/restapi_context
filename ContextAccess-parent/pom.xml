@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.bonitasoft.rest.context</groupId>
+    <artifactId>ContextAccess-parent</artifactId>
+    <version>1.0</version>
+    <name>Context Access Parent</name>
+    <description>Context Access Parent</description>
+    <packaging>pom</packaging>
+
+    <properties>
+        <!-- project version -->
+        <context-access.version>2.8</context-access.version>
+
+        <!-- rest api dependencies librairies -->
+        <bonita.version>7.2.2</bonita.version>
+        <groovy.version>2.4.4</groovy.version>
+        <json-simple.version>1.1</json-simple.version>
+
+        <!-- project descriptions -->
+        <document-permission-rule.name>DocumentPermissionRule</document-permission-rule.name>
+        <context-access-restapi.name>ContextAccess</context-access-restapi.name>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- technical versions -->
+        <java.version>1.8</java.version>
+        <maven-compiler-plugin.version>3.3</maven-compiler-plugin.version>
+        <groovy-eclipse-compiler.version>2.9.2-01</groovy-eclipse-compiler.version>
+        <groovy-eclipse-batch.version>2.4.3-01</groovy-eclipse-batch.version>
+        <maven-replacer-plugin.version>1.5.2</maven-replacer-plugin.version>
+        <maven-assembly-plugin.version>2.4.1</maven-assembly-plugin.version>
+        <maven-resources-plugin.version>3.0.2</maven-resources-plugin.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.bonitasoft.web</groupId>
+                <artifactId>bonita-web-extensions-sp</artifactId>
+                <version>${bonita.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.codehaus.groovy</groupId>
+                <artifactId>groovy-all</artifactId>
+                <version>${groovy.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.googlecode.json-simple</groupId>
+                <artifactId>json-simple</artifactId>
+                <version>${json-simple.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.bonitasoft.rest.context</groupId>
+                <artifactId>ContextAccess-core</artifactId>
+                <version>${context-access.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>
