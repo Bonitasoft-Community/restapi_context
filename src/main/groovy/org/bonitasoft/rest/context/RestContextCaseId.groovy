@@ -611,8 +611,14 @@ public class RestContextCaseId {
             if (caseInstanceIdParam!=null)
             {
                 processInstance = processAPI.getProcessInstance( caseInstanceIdParam );
-                processInstanceId =   processInstance.getId();
-
+                processInstanceId 	=   processInstance.getId();
+                Long rootCaseId 	= processInstance.getRootProcessInstanceId();
+                if (processInstance.getId() != rootCaseId)
+                {
+                    processInstanceRoot = processAPI.getProcessInstance( rootCaseId );
+                }
+        
+                
                 processDefinitionIdParam = processInstance.getProcessDefinitionId();
             }
         } catch(Exception e )
