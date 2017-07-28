@@ -740,7 +740,7 @@ public class RestContextCaseId {
         this.contentStorageId= contentStorageId;
 
         this.documentId=null;
-
+        analysisString+="initializeFromContentStorageId["+contentStorageId+"];";
         boolean allIsOk = true;
         try {
             final SearchOptionsBuilder builder = new SearchOptionsBuilder(0, 2);
@@ -749,7 +749,10 @@ public class RestContextCaseId {
             final SearchResult<Document> searchResult = processAPI.searchDocuments( builder.done());
             if (searchResult.getCount() == 1) {
                 documentId = searchResult.getResult().get(0);
+                document  =  processAPI.getDocument(documentId);
                 processInstanceId =document.getProcessInstanceId();
+                analysisString+="FoundbySearchDocuments: processInstance["+processInstanceId+"] docId["+document.getId()+"];";
+                
             }
         }
         catch (Exception e ) {
@@ -757,7 +760,11 @@ public class RestContextCaseId {
             allIsOk=false;
         }
         if ( ! allIsOk) {
-            String sqlRequest = "select DOCUMENT_MAPPING.NAME, DOCUMENT_MAPPING.PROCESSINSTANCEID, DOCUMENT.ID  from DOCUMENT_MAPPING, DOCUMENT  where DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID and   DOCUMENT.ID=?";
+        	
+        	// DOCUMENT : this is the Storage table, containing the blob. DOCUMENT.ID is the contentstorageid        	
+        	// Document_MAPPING : this is the document table. DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID
+        	//                       the docId is store on DOCUMENT_MAPPING.ID is the docID
+            String sqlRequest = "select DOCUMENT_MAPPING.NAME, DOCUMENT_MAPPING.PROCESSINSTANCEID, DOCUMENT_MAPPING.ID  from DOCUMENT_MAPPING, DOCUMENT  where DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID and   DOCUMENT.ID=?";
             Connection con=null;
             PreparedStatement pStmt=null;
 
@@ -770,9 +777,15 @@ public class RestContextCaseId {
                     // document
                     processInstanceId= rs.getLong( "PROCESSINSTANCEID");
                     documentId = rs.getLong("ID");
+                    analysisString+="FoundbySql: processInstance["+processInstanceId+"] docId["+documentId+"];";
                 }
                 rs.close();
                 allIsOk=true;
+                if (documentId!=null) {
+                	analysisString+="getDocument(["+documentId+"]);";
+                    document  =  processAPI.getDocument(documentId);
+                }
+          
             }
             catch( Exception e) {
                 allIsOk=false;
@@ -781,9 +794,6 @@ public class RestContextCaseId {
                 pStmt.close();
             if (con!=null)
                 con.close();
-        }
-        if (documentId!=null) {
-            document  =  processAPI.getDocument(documentId);
         }
         return allIsOk;
     }
