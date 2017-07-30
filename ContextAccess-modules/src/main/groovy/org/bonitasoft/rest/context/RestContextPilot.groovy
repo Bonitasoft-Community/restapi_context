@@ -499,6 +499,10 @@ public class RestContextPilot {
         else
         {
             // permission is a set of info separate by a ;
+        	// Special: the permissionControl may contains no permission at all (example, only "" or "format:date").
+        	// Is that situation, we consider that the default permission is "public"
+        	// the marker "onePermissionIsDefine" contains this information
+        	boolean onePermissionIsDefine=false;
             StringTokenizer st = new StringTokenizer( permissionControl, ";");
 
             while ( st.hasMoreTokens() && ( !  allowAccess) )
@@ -508,20 +512,24 @@ public class RestContextPilot {
                 if (cstPermissionData.equals(onePermission) || (cstPermissionPublic.equals(onePermission)))
                 {
                     analysis+=":publicAccess";
+                    onePermissionIsDefine=true;
                     allowAccess=true;
                 }
                 else if (cstPermissionAdmin.equals( onePermission ))
                 {
                     allowAccess= contextCaseId.isAdministratorUser();
+                    onePermissionIsDefine=true;
                     analysis+=":admin ? "+allowAccess;
                 }
 				else if (cstPermissionSupervisor.equals( onePermission ))
 				{
 					allowAccess= contextCaseId.isSupervisorUser();
-					analysis+=":supervisor ? "+allowAccess;
+                    onePermissionIsDefine=true;
+                    analysis+=":supervisor ? "+allowAccess;
 				}
                 else if (cstPermissionInitiator.equals( onePermission ))
                 {
+                    onePermissionIsDefine=true;
                     analysis+=":initiator ? ";
                     if  ((contextCaseId.processInstance != null) && (contextCaseId.processInstance.getStartedBy() == contextCaseId.userId))
                     {
@@ -537,6 +545,7 @@ public class RestContextPilot {
                 }
                 else if (onePermission.startsWith(cstPermissionTask))
                 {
+                    onePermissionIsDefine=true;
                     String taskName = onePermission.substring( cstPermissionTask.length());
                     analysis+=":taskName["+taskName+"] ";
                     SearchOptionsBuilder searchOptions = new SearchOptionsBuilder(0,100);
@@ -567,6 +576,7 @@ public class RestContextPilot {
                 }
                 else if (onePermission.startsWith(cstPermissionActor))
                 {
+                    onePermissionIsDefine=true;
                     String actorName = onePermission.substring(cstPermissionActor.length());
                     analysis+=":actorName["+actorName+"] ProcessDef["+processDefinitionId+"]";
                     Boolean isPart = isPartOfActor( actorName, processDefinitionId );
@@ -580,6 +590,7 @@ public class RestContextPilot {
                 }
                 else if (onePermission.startsWith( cstPermissionAccessRight ))
                 {
+                    onePermissionIsDefine=true;
                     String accessName = onePermission.substring(cstPermissionAccessRight.length());
                     analysis+=":accessRight["+accessName+"]";
                     Boolean isPart = isPartOfAccessRight( varName, accessName );
@@ -598,9 +609,14 @@ public class RestContextPilot {
                 }
 
             } // end loop on permission
+			if (! onePermissionIsDefine)
+			{
+				analysis+=",noPermissionDefined:True by default";
+				allowAccess=true;
+			}
         } // end permission==null
 
-       
+      
         analysis+=", ALLOW="+allowAccess;
         contextCaseId.logWithPrefix("RestContextPilot.checkPermissionString : analysis:", analysis);
         trackPerformance.endSubOperation( trackSubOperation);

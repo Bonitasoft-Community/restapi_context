@@ -43,11 +43,14 @@ import org.bonitasoft.engine.search.SearchResult
 
 
 /* ******************************************************************************** */
-/*                                                                                                                                                                  */
-/* RestContextTransformData    for 1.8                                                                                                                                    */
-/*                                                                                                                                                                  */
-/*  For an Data and the pilot, calcul the result to send.         */
-/*                                                                                                                                                                  */
+/*                                                                                  */
+/* RestContextTransformData    for 1.8												*/
+/*                                               									*/
+/*   note: if you use a JDK 1.7, you will see some compilation error in the Studio.	*/
+/*                                                                                  */
+/*  Just remove this file and you can deploy 										*/
+/*  For an Data and the pilot, calcul the result to send.         					*/
+/*                                                                                  */
 /* ******************************************************************************** */
 
 

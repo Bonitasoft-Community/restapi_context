@@ -553,8 +553,8 @@ class RestContextHandleGet implements RestApiController {
 				if (contextCaseId.getPilot().getExpliciteVariable().isExplicitVariable( varName ))
 				{
 					// yes, it is
-					completeValueProcessVariable( rootResult, varName, varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(), trackPerformance );
 					foundName=true;
+					completeValueProcessVariable( rootResult, varName, varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(), trackPerformance );
 				}
 				
                 // We want to load the data varName : is that a business Data ?
@@ -606,6 +606,7 @@ class RestContextHandleGet implements RestApiController {
 				   {
 					   if (parameter.getName().equals( varName ))
 					   { 
+						   foundName=true;
 						   contextCaseId.log( "Parameter["+parameter.getName()+"]");
 						   if ( contextCaseId.isAllowVariableName(	parameter.getName() ))
                     	 		rootResult.put( parameter.getName(), parameter.getValue());
