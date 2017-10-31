@@ -26,6 +26,8 @@ Run the BonitaPortal, and connect as an Administrator.
 3. Click on the button ADD, and give the file “ContextAccess-x.y.zip"
 4. that's it : the RestContextExtention is installed and deployed
 
+Nota: to install the Process Demonstration and the Source environment, see the PDF document in the release.
+
 -------------------------------- Data managed --------------------------------
 These type of variable are managed
 * Simple variable : STRING, 

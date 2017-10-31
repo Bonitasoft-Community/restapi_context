@@ -119,7 +119,9 @@ public class RestContextCaseId {
     public ScopeSearch scopeSearch = ScopeSearch.DEFAULT;
 
 
-
+	/**
+	 * UserId to check the permission
+	 */
     Long userId = null;
     ProcessAPI processAPI;
     IdentityAPI identityAPI;
@@ -139,6 +141,10 @@ public class RestContextCaseId {
 	public String allowContextAnalysis;
 	
 
+	public boolean isAnalyse=true;
+	public String usernameAnalyse;
+
+	
     public RestContextCaseId( Long userId, ProcessAPI processAPI, IdentityAPI identityAPI,  ProfileAPI profileAPI)
     {
         this.userId = userId;
@@ -307,7 +313,10 @@ public class RestContextCaseId {
         return true;
     }
 
-
+	/**
+	 * isAdminstrator
+	 * @return
+	 */
     public boolean isAdministratorUser(){
         List<Profile> listProfiles=profileAPI.getProfilesForUser( userId,0,10000,ProfileCriterion.NAME_ASC );
         for (Profile profile : listProfiles)
@@ -318,6 +327,9 @@ public class RestContextCaseId {
         return false;
     }
 
+	/**
+	 * isSupervisor
+	 */
 	public boolean isSupervisorUser()
 	{
 		if (processDefinitionId ==null)
@@ -420,6 +432,15 @@ public class RestContextCaseId {
             contextResult.put("taskname", archivedActivityInstance.getName());
             contextResult.put("isTaskArchived", true );
         }
+		if (isAnalyse)
+		{
+            contextResult.put("analyse", true);
+			// this is the parameters
+			contextResult.put("analyseparameterstring", analysisString);	
+			// this is the execution
+			contextResult.put("analyseexecutionstring", analysisString);	
+			contextResult.put("analysepermission", pilot.getAnalysisPermission());	
+		}
     }
 
 
@@ -474,13 +495,15 @@ public class RestContextCaseId {
     {
         try
         {
-            if (getOneParameter(paramName)!=null)
+			String parameter=getOneParameter(paramName);
+
+            if (parameter!=null && parameter.trim().length()>0 && ! "undefined".equals(parameter))
             {
                 return  Long.valueOf( getOneParameter(paramName));
             }
         } catch(Exception e )
         {
-            analysisString+= ";"+analysisInformation+ "["+getOneParameter("caseId")+"] : "+e.toString();
+            analysisString+= ";"+analysisInformation+ "["+getOneParameter(paramName)+"] : "+e.toString();
         };
         return null;
     }
@@ -523,7 +546,7 @@ public class RestContextCaseId {
             log(" URL ["+url+"] isProcessInstanciation="+(detectTypeUrl == TypeUrl.PROCESSINSTANCIATION)+", isProcessOverview="+(detectTypeUrl == TypeUrl.CASEOVERVIEW)+", isTaskExecution="+(detectTypeUrl == TypeUrl.TASKEXECUTION));
         }
 
-
+		
         //----------------------------  decode each parameter
         Long taskInstanceIdParam=null;
         Long caseInstanceIdParam=null;
@@ -727,6 +750,30 @@ public class RestContextCaseId {
         analysisString +=trace();
         // log( analysisString );
 
+		// -------------------------------- Analyse
+		isAnalyse=false;
+		if ("true".equals(getOneParameter("analyse")))
+		{
+			if (isAdministratorUser())
+			{
+				isAnalyse=true;
+				analysisString+"Analyse in progress;";
+			}		
+		}
+		usernameAnalyse = getOneParameter("usernameanalyse");
+		if (isAnalyse)
+		{
+			try
+			{
+				User user =identityAPI.getUserByUserName(usernameAnalyse);
+				userId= user.getId();
+			}
+			catch( Exception e)
+			{
+				analysisString+=" usernameanalyse["+usernameAnalyse+"] not found;";
+			} 
+		}
+		
     } // end decodesParameters
 
 
@@ -740,7 +787,7 @@ public class RestContextCaseId {
         this.contentStorageId= contentStorageId;
 
         this.documentId=null;
-        analysisString+="initializeFromContentStorageId["+contentStorageId+"];";
+
         boolean allIsOk = true;
         try {
             final SearchOptionsBuilder builder = new SearchOptionsBuilder(0, 2);
@@ -749,10 +796,7 @@ public class RestContextCaseId {
             final SearchResult<Document> searchResult = processAPI.searchDocuments( builder.done());
             if (searchResult.getCount() == 1) {
                 documentId = searchResult.getResult().get(0);
-                document  =  processAPI.getDocument(documentId);
                 processInstanceId =document.getProcessInstanceId();
-                analysisString+="FoundbySearchDocuments: processInstance["+processInstanceId+"] docId["+document.getId()+"];";
-                
             }
         }
         catch (Exception e ) {
@@ -760,11 +804,7 @@ public class RestContextCaseId {
             allIsOk=false;
         }
         if ( ! allIsOk) {
-        	
-        	// DOCUMENT : this is the Storage table, containing the blob. DOCUMENT.ID is the contentstorageid        	
-        	// Document_MAPPING : this is the document table. DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID
-        	//                       the docId is store on DOCUMENT_MAPPING.ID is the docID
-            String sqlRequest = "select DOCUMENT_MAPPING.NAME, DOCUMENT_MAPPING.PROCESSINSTANCEID, DOCUMENT_MAPPING.ID  from DOCUMENT_MAPPING, DOCUMENT  where DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID and   DOCUMENT.ID=?";
+            String sqlRequest = "select DOCUMENT_MAPPING.NAME, DOCUMENT_MAPPING.PROCESSINSTANCEID, DOCUMENT.ID  from DOCUMENT_MAPPING, DOCUMENT  where DOCUMENT_MAPPING.DOCUMENTID = DOCUMENT.ID and   DOCUMENT.ID=?";
             Connection con=null;
             PreparedStatement pStmt=null;
 
@@ -777,15 +817,9 @@ public class RestContextCaseId {
                     // document
                     processInstanceId= rs.getLong( "PROCESSINSTANCEID");
                     documentId = rs.getLong("ID");
-                    analysisString+="FoundbySql: processInstance["+processInstanceId+"] docId["+documentId+"];";
                 }
                 rs.close();
                 allIsOk=true;
-                if (documentId!=null) {
-                	analysisString+="getDocument(["+documentId+"]);";
-                    document  =  processAPI.getDocument(documentId);
-                }
-          
             }
             catch( Exception e) {
                 allIsOk=false;
@@ -794,6 +828,9 @@ public class RestContextCaseId {
                 pStmt.close();
             if (con!=null)
                 con.close();
+        }
+        if (documentId!=null) {
+            document  =  processAPI.getDocument(documentId);
         }
         return allIsOk;
     }

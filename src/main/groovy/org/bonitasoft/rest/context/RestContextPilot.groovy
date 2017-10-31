@@ -106,12 +106,18 @@ public class RestContextPilot {
 	public final static String cstPermissionTask = "task:";
 	public final static String cstPermissionActor = "actor:";
 	public final static String cstPermissionData="data";
+	public final static String cstPermissionDataType="datatype";
+	public final static String cstPermissionStar="*";
 	public final static String cstPermissionPublic="public"
 	public final static String cstPermissionAdmin="admin";
 	public final static String cstPermissionSupervisor="supervisor";
 
 	RestContextExpliciteVariable restContextExpliciteVariable;
 
+	/**keep a trace of all permission executed
+	 *  
+	 */
+	Map<String,Object> pilotAnalysePermission = new HashMap<String,Object>();
 	
 	public RestContextPilot()
 	{
@@ -235,12 +241,51 @@ public class RestContextPilot {
         	
         }
         
-        contextCaseId.log( analysisString);
+        contextCaseId.log( analysisString );
     }
 
+	
+	/* ********************************************************************* */
+	/*                                                                                                                                                                   */
+	/*
+	 * get information from the pilot /*
+	 */
+	/*                                                                                                                                                                  */
+	/* ********************************************************************* */
+	/**
+	 * gettert
+	 * @return
+	 */
 	public String getAnalysisString() {
 		return analysisString;
 	};
+
+	public String getErrorMessage() {
+		return errorMessage;
+	}
+
+	
+	private addPermissionAnalysis( String varName, String analysis, boolean result)
+	{
+		if (pilotAnalysePermission.get(varName)!=null)
+			return;
+		Map<String,Object> oneAnalysis= new HashMap<String,Object>();
+		oneAnalysis.put("name", varName);
+		oneAnalysis.put("analysis", analysis);
+		oneAnalysis.put("result", result);
+		pilotAnalysePermission.put(varName, oneAnalysis);
+	}
+		
+		
+	/**
+	 * return the Permission analysis
+	 * @return
+	 */
+	public Map<String,Object> getAnalysisPermission()
+	{
+		return pilotAnalysePermission;
+	}
+
 
 	public boolean isPilotDetected() {
 		return this.isPilotDetected;
@@ -260,10 +305,6 @@ public class RestContextPilot {
 		if (varObj == null)
 			return varObj;
 		return varObj.toString();
-	}
-
-	public String getErrorMessage() {
-		return errorMessage;
 	}
 
 	
@@ -449,6 +490,8 @@ public class RestContextPilot {
 		String permissionControl = pilotDataMap.getAt(varName);
 		if (permissionControl == null) {
 			contextCaseId.log("isAllowVariableName[" + varName + "] NoPermission(yes)");
+			addPermissionAnalysis( varName, "NoPermission(Access Allowed)", true);
+			
 			return true;
 		}
 
@@ -472,6 +515,8 @@ public class RestContextPilot {
         {
         	analysis+=",fromCache["+allowAccessInCache+"]";
             contextCaseId.logWithPrefix("RestContextPilot.checkPermissionString : analysis:", analysis);
+			addPermissionAnalysis( varName, analysis, allowAccessInCache);
+			
         	return allowAccessInCache;
         }
         
@@ -509,7 +554,7 @@ public class RestContextPilot {
             {
                 String onePermission= st.nextToken();
                 analysis+=";["+onePermission+"]";
-                if (cstPermissionData.equals(onePermission) || (cstPermissionPublic.equals(onePermission)))
+                if (cstPermissionData.equals(onePermission) || (cstPermissionPublic.equals(onePermission) || cstPermissionDataType.equals(onePermission) || cstPermissionStar.equals(onePermission)))
                 {
                     analysis+=":publicAccess";
                     onePermissionIsDefine=true;
@@ -621,6 +666,9 @@ public class RestContextPilot {
         contextCaseId.logWithPrefix("RestContextPilot.checkPermissionString : analysis:", analysis);
         trackPerformance.endSubOperation( trackSubOperation);
 
+		addPermissionAnalysis( varName, analysis, allowAccess);
+		
+		
         cachePermissionStatus.put(permissionControl, allowAccess);
         
         return allowAccess;

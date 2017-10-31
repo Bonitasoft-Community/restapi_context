@@ -948,7 +948,7 @@ class RestContextHandleGet implements RestApiController {
 				if (! contextInfo instanceof Map)
 					contextInfo=null;
 				
-                loadBdmVariableOneLevel(rootResult, saveOneBdm, dataBdmEntity, contextInfo,  contextCaseId );
+                loadBdmVariableOneLevel(businessData.getName(), rootResult, saveOneBdm, dataBdmEntity, contextInfo,  contextCaseId );
                 trackPerformance.endSubOperation( trackSubOperation);
 
 
@@ -984,19 +984,20 @@ class RestContextHandleGet implements RestApiController {
      *
      * data: summerOrder
      * Context : {
-     "name": "data",
-     "ticket": "*",
-     "lines" : {  "linename" : "data",
-     "ticket" : { "solicitante" : "data" },
-     "price":"data"
+     *    "name": "initiator;actor:TeacherActor",
+     *    "ticket": "*",
+     *    "lines" : {  "linename" : "data",
+     *    "ticket" : { "solicitante" : "data" },
+     *    "price":"data"
      }
      * We run all the different method.
-     * getName() ==> name is reference, save it
+     * getName() ==> name is reference, save it (check permission - pathNameVariable is then very usefull for the analysis point of view - variableName = pathNameVariable+nameAttribut)
      * getVendor() ==> vendor is not referenced, skip it
-     * getTicket() is a BDM so get ticket : referenced, then call recursively. To say "*" then the sub context is NULL
+     * getTicket() is a BDM so get ticket : referenced, then call recursively. Context say "*" then the sub context is NULL (all accepted)
      * getLines() is a BDM : call recursively given { "linename..." as the sub context}
      */
-    private void loadBdmVariableOneLevel(Map<String,Object> rootResult,
+    private void loadBdmVariableOneLevel(String pathNameVariable,
+										Map<String,Object> rootResult,
                                          Map<String,Object> saveLocalLevel,
                                          Entity dataBdmEntity,
                                          Map<String,Object> contextLocalLevel,
@@ -1084,14 +1085,25 @@ class RestContextHandleGet implements RestApiController {
                         nameAttribute = privateFields.get(nameAttribute.toLowerCase());
 
                     // ok, the context pilot now
+					Object contextInfo=null;
                     if (contextLocalLevel!=null)
                     {
-                        Object contextInfo = contextLocalLevel.get(nameAttribute);
+                        contextInfo = contextLocalLevel.get(nameAttribute);
                         keepIt = contextInfo != null;
                     }
-                    // logger.info("loadBdmVariableOneLevel.10b method["+method.getName()+"] nameAttribut["+nameAttribute+"] Result=["+value+"] keepIt="+keepIt+" Entity ? "+(value!=null && value instanceof Entity)+" classValue=["+(value !=null ? value.getClass().getName() : "null")+"]");
-
-
+					if (keepIt && contextInfo!=null)
+					{
+						// check the permission now if there are a context info as a STRING
+						logger.info("loadBdmVariableOneLevel.10b name pathName+nameAttribut["+pathNameVariable+"."+nameAttribute+"] ContextInfo=["+contextInfo.getClass().getName()+"]");
+						if (contextInfo instanceof String)
+						{
+							boolean permissionAccepted = contextCaseId.getPilot().checkPermissionString(pathNameVariable+"."+nameAttribute, contextInfo);						
+							// logger.info("loadBdmVariableOneLevel.10b name pathName+nameAttribut["+pathNameVariable+"."+nameAttribute+"] ContextInfo=["+contextInfo+"] permission["+permissionAccepted+"]");
+							keepIt = permissionAccepted;					
+						}
+					}
+                   // logger.info("loadBdmVariableOneLevel.10c method["+method.getName()+"] nameAttribut["+nameAttribute+"] Result=["+value+"] keepIt="+keepIt+" Entity ? "+(value!=null && value instanceof Entity)+" classValue=["+(value !=null ? value.getClass().getName() : "null")+"]");
+					  
                     if (!keepIt)
                         continue;
 
@@ -1116,7 +1128,6 @@ class RestContextHandleGet implements RestApiController {
                     {
                         // logger.info("loadBdmVariableOneLevel.10d SubChild detected");
 
-                        Object contextInfo = contextLocalLevel== null ? null: contextLocalLevel.get(nameAttribute);
                         if (contextInfo instanceof String && "*".equals(contextInfo))
                             contextInfo=null;
 						if (!contextInfo instanceof Map)
@@ -1131,7 +1142,7 @@ class RestContextHandleGet implements RestApiController {
                         {
                             Map<String,Object> bdmChild = new HashMap<String,Object>();
                             saveLocalLevel.put(nameAttribute, bdmChild);
-                            loadBdmVariableOneLevel(rootResult, bdmChild, value, contextInfo, contextCaseId);
+                            loadBdmVariableOneLevel(pathNameVariable+"."+nameAttribute, rootResult, bdmChild, value, contextInfo, contextCaseId);
                         }
                         if (value instanceof List)
                         {
@@ -1142,7 +1153,7 @@ class RestContextHandleGet implements RestApiController {
                             {
                                 Map<String,Object> bdmChild = new HashMap<String,Object>();
                                 listBdmChild.add( bdmChild );
-                                loadBdmVariableOneLevel(rootResult, bdmChild, valueInList, contextInfo, contextCaseId);
+                                loadBdmVariableOneLevel(pathNameVariable+"."+nameAttribute, rootResult, bdmChild, valueInList, contextInfo, contextCaseId);
                             }
 
                         }
