@@ -10,7 +10,7 @@ import java.util.logging.Logger;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
-import org.bonitasoft.rest.context.RestContextAccessorJava;
+
 
 /* ******************************************************************************** */
 /*                                                                                                                                                                  */
@@ -108,6 +108,7 @@ class RestContextExpliciteVariable {
 		        final JSONObject valueData = (JSONObject) jsonParser.parse(valueSt);
 		        result = valueData;;
 			}
+			/*
 			if (valueSt.startsWith( cstCallJava))
 			{
 				// java:nz.ac.auckland.aegrotat.ApplicationAPI.loadJsonFromSql({{caseid}}#NotManagedBizDataDS)
@@ -118,6 +119,7 @@ class RestContextExpliciteVariable {
 				result=restContextAccessorJava.execute( valueSt );
 				contextCaseId.logWithPrefix("RestContextExpliciteVariable.getValue : ", restContextAccessorJava.getAnalysis());
 			}
+			*/
 		}
 		catch(Exception e)
 		{

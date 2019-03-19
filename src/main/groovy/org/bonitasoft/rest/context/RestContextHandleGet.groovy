@@ -132,7 +132,7 @@ class RestContextHandleGet implements RestApiController {
 
                 if  (! contextCaseId.isAllowContext() )
                 {
-                    contextCaseId.log("No Permission");
+                    contextCaseId.log("No Permission to access this item (process definition, task, case id) : check the user/actor mapping");
                     canContinue=false;
                 }
             }
@@ -193,7 +193,8 @@ class RestContextHandleGet implements RestApiController {
                 contextCaseId.completeResult( contextResult );
             }
 
-
+			contextResult.put("contextPath", request.getContextPath());
+			
             trackPerformance.addMarker("getFinalResult");
             if (contextCaseId.isLog)
             {
