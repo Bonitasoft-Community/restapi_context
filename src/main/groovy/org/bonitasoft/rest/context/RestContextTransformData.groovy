@@ -90,8 +90,9 @@ public class RestContextTransformData {
                     }
                     else
                     {
-                        boolean isAllowed = contextCaseId.getPilot().checkPermissionString( key, pilotAction.get( key ) );
-                        trace +=";IsAllow ? "+isAllowed;
+						Object valuePilot = pilotAction.get( key );
+                        boolean isAllowed = valuePilot==null ? false : contextCaseId.getPilot().checkPermissionString( key, valuePilot.toString() );
+                        trace +="-pilotAction["+valuePilot+"];IsAllow ? "+isAllowed;
                         if (isAllowed)
                         {
                             subResult.put(key,  transformSingleValue( key, varValueTransformed.get( key ), pilotAction.get( key )==null ? null : pilotAction.get( key ).toString()  ));
@@ -134,10 +135,11 @@ public class RestContextTransformData {
         } // end of varcontext as a Map
         else
         {
-            trace +="; pilotActionString["+pilotAction.toString()+"]";
+			
+            trace +="; pilotAction["+(pilotAction==null ? null : pilotAction.toString())+"]";
 
             // the pilotAction is maybe a Permission string
-            boolean isAllowed = contextCaseId.getPilot().checkPermissionString(varName, pilotAction);
+            boolean isAllowed = pilotAction==null? false : contextCaseId.getPilot().checkPermissionString(varName, pilotAction.toString());
             trace +=";IsAllow ? "+isAllowed;
             if (isAllowed)
             {

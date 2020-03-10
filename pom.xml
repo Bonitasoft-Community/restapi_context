@@ -28,11 +28,7 @@
   	<!--  2. get the project, and "cd src/main/java" and "maven install"-->
   	<!--  3. get the JAVA lib in the release and then run: -->
   	<!--     mvn install:install-file -Dfile=RestContextComponentJava-2.9.jar -DgroupId=org.bonitasoft.rest.context -DartifactId=RestContextComponentJava -Dversion=2.9 -Dpackaging=jar -->
-     <dependency>
-            <groupId>org.bonitasoft.rest.context</groupId>
-            <artifactId>RestContextComponentJava</artifactId>
-            <version>2.9</version>
-        </dependency>
+   
 
         <dependency>
             <groupId>org.bonitasoft.web</groupId>

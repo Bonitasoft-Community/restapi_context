@@ -1,0 +1,213 @@
+<!doctype html>
+<!--[if lt IE 7]>
+<html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>
+<html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>
+<html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js"> <!--<![endif]-->
+<head>
+    <meta charset="utf-8">
+    <title>Context Analyse</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width">
+    <link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/animate.css" />
+    <link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/bootstrap.min.css">
+	<link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/main.css">
+	<link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/style.css">
+    <link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/ng-modal.css">
+	<link rel="stylesheet" href="pageResource?page=custompage_contextanalyse&location=style/angular-material.min.css"> 
+	 
+	<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+	<script type="text/javascript" src="https://www.google.com/uds/?file=visualization&amp;v=1&amp;hl=fr&amp;packages=corechart&amp;async=2"></script>
+	<link type="text/css" href="https://www.google.com/uds/api/visualization/1.0/ff67c3772da186a412ae3231c32409e9/ui+fr.css" rel="stylesheet">
+	<script type="text/javascript" src="https://www.google.com/uds/api/visualization/1.0/ff67c3772da186a412ae3231c32409e9/format+fr,default+fr,ui+fr,corechart+fr.I.js"></script>
+	<link href="https://ajax.googleapis.com/ajax/static/modules/gviz/1.0/core/tooltip.css" rel="stylesheet" type="text/css">
+		
+<style>
+.Loading {
+    display: inline-block;
+    vertical-align: middle;
+    background-position: center;
+    background:no-repeat;
+    background-image: url('data:image/gif;base64,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');
+    width:20px;
+    height:20px;
+    margin-top:6px;
+    margin-right:7px;
+}
+.AutocompleteDropDown {
+	background-color: #fcf8e3;
+	}
+</style>
+
+		
+</head>
+<body ng-app="contextanalysemonitor">
+
+<h1><center>Context Analyse</center></h1>
+
+
+<div class="container-fluid" id="accordion">
+	<div class="row">
+		<div class="component col-xs-12"  ng-controller="ContextAnalyseControler as contextanalysectrl">
+			<legend class="text-primary"><span class="glyphicon glyphicon-th"></span>Rest Context Analysis</legend>
+			
+				
+				<!-- 
+				<div ng-show="contextanalysectrl.inprogress">
+					<span class="Loading">.</span>
+					Please wait, collect in progress
+				</div>
+				inprogress={{contextanalysectrl.isInProgress()}}
+				
+				<div ng-show="contextanalysectrl.isInProgress()">IN PROGRESS</div>
+				 -->
+				
+				<div class="panel panel-info">
+					<div class="panel-heading">Parameters</div>
+					<div>
+						<table style="margin:30px 100px 10px 10px" >
+							<tr>
+							<td colspan="2">
+								<div class="well">
+								Give a Process definition ID, a Case ID or a Task ID
+								</div>
+							</td>
+							</tr>
+							<tr>
+							<td>Process definition ID</td><td><input ng-model="contextanalysectrl.param.processdefinitionid" type="number" ></td>
+							</tr>
+							<tr>
+							<td>Case ID</td><td><input ng-model="contextanalysectrl.param.caseid" type="number" ></td>
+							</tr>
+							<tr>
+							<td>Task ID</td><td><input ng-model="contextanalysectrl.param.taskid" type="number" ></td>
+							</tr>
+							<tr>
+							<td>User Name</td><td><input ng-model="contextanalysectrl.param.username" type="text" ></td>
+							</tr>
+							<tr>
+							<td colspan="2"><center></center> <button ng-click="contextanalysectrl.callrestapi()" ng-disable="contextanalysectrl.inprogress" class="btn btn-info btn-xs">Analyse</button></center></td>
+							</tr>							
+						</table>
+						
+						<div class="alert alert-success" >
+							{{contextanalysectrl.result.context.analyseparameterstring}}
+						</div>
+					</div>
+				</div>
+				
+				<table>
+				<tr>
+				<td> <!--  Result variable -->
+					<div class="panel panel-info">
+						<div class="panel-heading">Variables</div>
+						<div>
+						<table class="table table-striped table-hover table-condensed" style="background-color:#dff0d8;margin:30px 100px 10px 10px" max-width="95%">
+							<tr>
+							<th>Name</th>
+							<th>Value</th>
+							</tr>
+							<tr ng-repeat="variableinfo in contextanalysectrl.getResultVariable() track by $index">
+							<td>{{variableinfo.name}}</td>
+							<td>{{variableinfo.value}}</td>
+							</tr>
+						</table>
+						</div>
+					</div>				
+				</td>
+				</tr><tr>
+				<td> <!--  Result Context -->
+					<div class="panel panel-success">
+						<div class="panel-heading">Context</div>
+						<div>
+						<table class="table table-striped table-hover table-condensed" style="background-color:#dff0d8;margin:30px 100px 10px 10px" width="90%">
+							<tr>
+								<th>Name</th>
+								<th>Value</th>
+							</tr>
+							<tr ng-repeat="variableinfo in contextanalysectrl.getResultContext() track by $index">
+								<td>{{variableinfo.name}}</td>
+								<td>{{variableinfo.value}}</td>
+							</tr>
+						</table>
+						</div>
+					</div>				
+				</td>
+				</tr><tr>
+				
+				<td> <!--  Result Access -->
+					<div class="panel panel-danger">
+						<div class="panel-heading">Permission</div>
+						<div>
+						<table class="table table-striped table-hover table-condensed" style="background-color:#dff0d8;margin:30px 100px 10px 10px" width="90%">
+							<tr>
+							<th>Variable</th>
+							<th>Analyse</th>
+							<th>Result</th>
+							</tr>
+							<tr ng-repeat="variableinfo in contextanalysectrl.getResultPermission() track by $index">
+								<td style="{{contextanalysectrl.getPermissionStyle(variableinfo)}}">{{variableinfo.name}}</td>
+								<td style="{{contextanalysectrl.getPermissionStyle(variableinfo)}}">{{variableinfo.analysis}}</td>
+								<td style="{{contextanalysectrl.getPermissionStyle(variableinfo)}}">{{variableinfo.result}}</td>
+							</tr>
+						</table>
+						</div>
+					</div>
+				
+				</td>
+				
+				</tr>
+				</table>
+				
+			
+	  	</div> <!--  end main div -->
+	</div>
+</div>
+
+
+
+<!-- Third party dependencies -->
+
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/jquery.min.js"></script>
+
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular.min.js"></script>
+
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-resource.min.js"></script>
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-cookies.min.js"></script>
+
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/bootstrap/js/bootstrap.min.js"></script>
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-bootstrap-tpls.min.js"></script>
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-file-upload.js"></script> 
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/ng-google-chart.js"></script> 
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-sanitize.min.js"></script> 
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/ng-modal.min.js"></script> 
+
+<!--  Material -->  
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-animate.min.js"></script>  
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-aria.min.js"></script>  
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-messages.min.js"></script>  
+<script src="pageResource?page=custompage_contextanalyse&location=3rd-party/angular-material.min.js"></script>  
+
+
+
+
+
+  
+
+<!-- Application dependencies -->
+<script src="pageResource?page=custompage_contextanalyse&location=contextanalysemonitor.js"></script>
+
+
+<script type="text/javascript" src="https://cdn.jsdelivr.net/alasql/0.3/alasql.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.10.3/xlsx.full.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.10.3/xlsx.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.10.3/xlsx.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.10.3/xlsx.core.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.10.3/cpexcel.js"></script>
+
+
+</body>
+</html>		

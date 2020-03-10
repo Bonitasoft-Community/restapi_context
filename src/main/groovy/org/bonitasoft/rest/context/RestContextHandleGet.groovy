@@ -106,7 +106,7 @@ class RestContextHandleGet implements RestApiController {
             sourceContextData+= pilot.getAnalysisString();
 			sourceContextData += "BEGINPILOT="+(pilot.getPilotDataMap()==null ? null : pilot.getPilotDataMap().toString())+" ENDPILOT";
 
-            contextCaseId.log( "=================== Start GetContext RESTAPI 7.2.5 TB");
+            contextCaseId.log( "=================== Start GetContext RESTAPI 2.13");
             boolean canContinue=true;
 
 
@@ -795,8 +795,7 @@ class RestContextHandleGet implements RestApiController {
 	        return;
     	}
     	catch(Exception e)
-    	{
-    		analysis+="Exception "+e.toString();
+    	{    		
     		final StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             final String exceptionDetails = sw.toString();

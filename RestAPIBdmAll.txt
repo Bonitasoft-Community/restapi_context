@@ -1,0 +1,531 @@
+package com.bonitasoft.rest.context;
+
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+
+import groovy.json.JsonBuilder
+import groovy.json.JsonException;
+import groovy.json.JsonSlurper;
+
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+import javax.servlet.http.HttpServletRequest
+import javax.servlet.http.HttpServletResponse
+
+import org.apache.http.HttpHeaders
+
+
+import org.bonitasoft.engine.api.APIClient;
+import org.bonitasoft.engine.api.BusinessDataAPI;
+import org.bonitasoft.engine.api.ProcessAPI;
+
+import org.bonitasoft.engine.bpm.data.DataInstance;
+import org.bonitasoft.engine.bpm.data.DataNotFoundException;
+import org.bonitasoft.engine.bpm.flownode.ActivityInstance;
+import org.bonitasoft.engine.bpm.flownode.ArchivedActivityInstance;
+import org.bonitasoft.engine.bpm.process.ArchivedProcessInstance;
+import org.bonitasoft.engine.bpm.process.ProcessInstance;
+import org.bonitasoft.engine.bdm.Entity;
+import org.bonitasoft.engine.bdm.dao.BusinessObjectDAO;
+
+import org.bonitasoft.engine.business.data.BusinessDataReference;
+import org.bonitasoft.engine.business.data.MultipleBusinessDataReference;
+import org.bonitasoft.engine.business.data.SimpleBusinessDataReference;
+import org.bonitasoft.engine.session.APISession;
+import org.bonitasoft.web.extension.ResourceProvider
+import org.bonitasoft.web.extension.rest.RestApiResponse
+import org.bonitasoft.web.extension.rest.RestApiResponseBuilder
+
+import com.bonitasoft.web.extension.rest.RestAPIContext
+import com.bonitasoft.web.extension.rest.RestApiController
+
+class GetContext implements RestApiController {
+
+    private static final Logger logger = LoggerFactory.getLogger(GetContext.class)
+
+	
+	private static final String cstActionCaseId = "caseId";
+	private static final String cstActionProcessDefinitionId = "processDefinitionId";
+	private static final String cstActionIsCaseArchived = "isCaseArchived";
+	private static final String cstActionTaskId = "taskId";
+	private static final String cstActionisTaskArchived = "isTaskArchived";
+	
+    @Override
+    RestApiResponse doHandle(HttpServletRequest request, RestApiResponseBuilder responseBuilder, RestAPIContext context) {
+        // To retrieve query parameters use the request.getParameter(..) method.
+        // Be careful, parameter values are always returned as String values
+
+        // Here is an example of how you can retrieve configuration parameters from a properties file
+        // It is safe to remove this if no configuration is required
+        Map<String,Object> result = new HashMap<String,Object>();
+		DataInstance contextData=null;
+		String sourceContextData="";
+		String contextDataSt = null;
+		boolean isLog=false;
+		Boolean isLogFromParameter=null;
+		logger.info("=================== GetContext RESTAPI");
+		
+        try
+		{
+			APIClient apiClient = context.apiClient;
+			ProcessAPI processAPI = context.apiClient.processAPI;
+			BusinessDataAPI businessDataAPI = context.apiClient.businessDataAPI;
+			
+			try
+			{
+				isLogFromParameter = Boolean.valueOf( request.getParameter("log"));
+				isLog = isLogFromParameter;
+			}
+			catch(Exception e) {}
+			
+			//----------------- get the perimeter (taskid or processInstanceId)
+			Long taskInstanceId = null;
+			Long processInstanceId = null;
+			try 
+			{
+				taskInstanceId = Long.valueOf( request.getParameter("taskId"));
+				ActivityInstance activityInstance = processAPI.getActivityInstance(taskInstanceId);
+				processInstanceId = activityInstance.getParentContainerId();
+			} catch(Exception e ) {};
+		
+			if (processInstanceId == null) {
+				try
+				{
+					processInstanceId = Long.valueOf( request.getParameter("caseId"));
+				} catch(Exception e ) {};
+			}
+			
+			if (processInstanceId == null)
+			{
+				result.put("error", "parameter [taskId] or [caseId] required");
+				return;
+			}
+
+			
+			// ------------------ retrieve correct information
+			// if the processinstance exist ? The task Id ? 
+			ProcessInstance processInstance=null;
+			ActivityInstance activityInstance = null;
+			ArchivedProcessInstance archivedProcessInstance = null;
+			ArchivedActivityInstance archivedActivityInstance
+			try
+			{
+				processInstance = processAPI.getProcessInstance(processInstanceId);
+				if (taskInstanceId !=null)
+					activityInstance = processAPI.getActivityInstance(taskInstanceId);
+			}
+			catch(Exception e)
+			{}
+			// same with archived... yes, in Bonita, class are different...
+			try
+			{
+				archivedProcessInstance = processAPI.getArchivedProcessInstance(processInstanceId);
+				if (taskInstanceId !=null)
+					archivedActivityInstance = processAPI.getArchivedActivityInstance(taskInstanceId);
+			}
+			catch(Exception e)
+			{}
+			if (processInstance == null && archivedProcessInstance == null)
+			{
+				result.put("error", "caseId unknown");
+				result.put("caseId", processInstanceId);
+				return;
+			}
+			if (taskInstanceId != null && activityInstance==null && archivedActivityInstance==null)
+			{
+				result.putAt("error", "taskId unknown");
+				result.put("caseId", processInstanceId);
+				result.put("taskId", taskInstanceId);
+				return;
+			}
+
+			//----------------------- get the pilot
+			
+			try
+			{
+				if (taskInstanceId !=null)
+				{
+					contextData = processAPI.getActivityDataInstance("context", taskInstanceId);
+					contextDataSt = contextData.getValue();
+					sourceContextData="ActivityDataInstance[context] value="+contextData.getValue();
+				}
+				
+			} catch(DataNotFoundException dnte ) {}
+
+			if (contextData == null)
+			{
+				try
+				{
+					contextData = processAPI.getProcessDataInstance("globalcontext", processInstanceId);
+					contextDataSt = contextData.getValue();
+					sourceContextData="ProcessDataInstance[globalcontext] value="+contextData.getValue();
+				} catch(DataNotFoundException dnte ) {}
+			}
+			if (contextData == null)
+			{
+				contextDataSt = "{ \"*\" : \"all\",";
+				contextDataSt += ", \""+cstActionCaseId+"\" : \""+cstActionCaseId+"\"";
+				contextDataSt += ", \""+cstActionProcessDefinitionId+"\" : \""+cstActionProcessDefinitionId+"\"";
+				contextDataSt += ", \""+cstActionIsCaseArchived+"\" : \""+cstActionIsCaseArchived+"\"";
+				contextDataSt += ", \""+cstActionTaskId+"\" : \""+cstActionTaskId+"\"";
+				contextDataSt += ", \""+cstActionisTaskArchived+"\" : \""+cstActionisTaskArchived+"\"";
+				contextDataSt += "}";
+				
+				
+				sourceContextData="Default value="+contextDataSt;
+			}
+			
+
+			logRest( isLog, "SourceContextData = "+sourceContextData);
+			
+			//--------------- return the content
+			JsonSlurper slurper = new JsonSlurper();
+			Object contextDataMap = slurper.parseText(contextDataSt);
+			if (contextDataMap == null )
+			{
+				result.put("error", "The JSON information is missing : "+sourceContextData);
+			}
+			else if (! contextDataMap instanceof Map)
+			{
+				result.put("error", "Local Variable [context] must be a MAP");
+			}
+			else
+			{
+				// decode the Log
+				if (isLogFromParameter==null) {
+					try
+					{
+						isLog = Boolean.valueOf( contextDataMap.get("RESTCONTEXTISLOG" ) );
+					}
+					catch( Exception e)
+					{}
+				}
+				
+				
+				for (Object varName : contextDataMap.keySet())
+				{
+					Object varAction = contextDataMap.get( varName );
+					logRest(isLog, "Loop Get variable["+varName+"] / action["+varAction+"]");
+				
+					if (varName.equals("*"))
+					{
+						List<DataInstance> listDataInstance=null;
+						// get all variables
+						if (taskInstanceId!=null)
+						{
+							listDataInstance = processAPI.getActivityDataInstances(taskInstanceId, 0,1000);
+							for (DataInstance data : listDataInstance)
+							{
+								completeValue(result, data.getName(), processInstanceId, taskInstanceId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+							}
+						}
+						listDataInstance = processAPI.getProcessDataInstances(processInstanceId, 0,1000);
+						for (DataInstance data : listDataInstance)
+						{
+							completeValue( result, data.getName(), processInstanceId, taskInstanceId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						}
+						
+						for (BusinessDataReference businessData : context.apiClient.businessDataAPI.getProcessBusinessDataReferences(processInstanceId, 0,1000))
+						{
+							logRest(isLog, "Loop Get BDm["+businessData.getName()+"] / type["+businessData.getType()+"]");
+							
+							completeValue(result, businessData.getName(),  processInstanceId, taskInstanceId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+						}
+						
+						
+					}
+					else if (cstActionCaseId.equals(varAction)) {
+						result.put(varName, processInstanceId);
+						logRest(isLog,"cstActionCaseId :  new Result["+result+"]");
+					}
+						
+					else if (cstActionProcessDefinitionId.equals(varAction))
+						result.put( varName, processInstance!=null ? processInstance.getProcessDefinitionId() : (archivedProcessInstance!=null ? archivedProcessInstance.getProcessDefinitionId() : null));
+						
+						
+					else if (cstActionIsCaseArchived.equals(varAction))
+						result.put( varName, processInstance==null );
+						
+					else if (cstActionTaskId.equals(varAction))
+						result.put( varName, taskInstanceId);
+						
+					else if (cstActionisTaskArchived.equals(varAction))
+						result.put( varName, activityInstance == null);
+					else
+					{
+						completeValue( result, varName, processInstanceId, taskInstanceId, apiClient, (Map<String,Object>) contextDataMap, isLog);
+					}
+					
+				} // end of list
+			}
+			logRest( isLog, "Final result "+result.toString())
+			
+		} catch(DataNotFoundException dnte ) 
+		{
+			logger.error("com.bonitasoft.rest.context: no context variable found");
+			result.put("error", "Expect [context] or [globalcontext] variable to pilot what to search");
+
+		}	
+		catch (JsonException je)
+		{			
+			logger.error("com.bonitasoft.rest.context: Bad JSON "+sourceContextData+" : "+je.toString());
+			result.put("error", "Bad JSON "+sourceContextData+" : "+je.toString());
+
+		}
+		catch(Exception e )
+		{
+			StringWriter sw = new StringWriter();
+			e.printStackTrace(new PrintWriter(sw));
+			String exceptionDetails = sw.toString();
+			logger.error("com.bonitasoft.rest.context: error "+e.toString()+" at "+exceptionDetails);
+			result.put("error", e.toString()+" at "+exceptionDetails);
+			
+		}
+		finally {
+			logger.info("=================== End GetContext RESTAPI");
+			
+	        // Send the result as a JSON representation
+	        // You may use buildPagedResponse if your result is multiple
+	        return buildResponse(responseBuilder, HttpServletResponse.SC_OK, new JsonBuilder(result).toPrettyString())
+		}
+    }
+
+    /**
+     * Build an HTTP response.
+     *
+     * @param  responseBuilder the Rest API response builder
+     * @param  httpStatus the status of the response
+     * @param  body the response body
+     * @return a RestAPIResponse
+     */
+    RestApiResponse buildResponse(RestApiResponseBuilder responseBuilder, int httpStatus, Serializable body) {
+        return responseBuilder.with {
+            withResponseStatus(httpStatus)
+            withResponse(body)
+            build()
+        }
+    }
+
+    /**
+     * Returns a paged result like Bonita BPM REST APIs.
+     * Build a response with content-range data in the HTTP header.
+     *
+     * @param  responseBuilder the Rest API response builder
+     * @param  body the response body
+     * @param  p the page index
+     * @param  c the number of result per page
+     * @param  total the total number of results
+     * @return a RestAPIResponse
+     */
+    RestApiResponse buildPagedResponse(RestApiResponseBuilder responseBuilder, Serializable body, int p, int c, long total) {
+        return responseBuilder.with {
+            withAdditionalHeader(HttpHeaders.CONTENT_RANGE,"$p-$c/$total");
+            withResponse(body)
+            build()
+        }
+    }
+
+	
+	/**
+	 * search the variable
+	 * @param result : the result to complete.
+	 * @param varName : the name of the variable to describe
+	 * @param processInstanceId
+	 * @param taskInstanceId
+	 */
+   private void completeValue( Map<String,Object> result, 
+	   							String varName, 
+								Long processInstanceId, 
+								Long taskInstanceId,
+								APIClient apiClient,
+								Map<String,Object> contextDataMap,
+								boolean isLog)
+   {
+
+	   ProcessAPI processAPI = apiClient.processAPI;
+	   BusinessDataAPI businessDataAPI = apiClient.businessDataAPI;
+	   
+	   logger.info("completeValue: Get variable["+varName+"]");
+	   
+	   DataInstance dataListInstance=null;
+	   try
+	   {
+		   dataListInstance = processAPI.getProcessDataInstance(varName.toString(), processInstanceId);
+		   logRest( isLog, "completeValue: Get variable["+varName+"] is a PROCESSDATA : ["+dataListInstance.getValue()+"]");
+		   
+		   result.put(dataListInstance.getName(), dataListInstance.getValue());
+		   return;
+	   } catch (DataNotFoundException dnte) {};
+	   try
+	   {
+		   if (taskInstanceId!=null)
+		   {
+			   // logger.info("Try get localvariable["+varName+"]");
+			   dataListInstance = processAPI.getActivityDataInstance(varName.toString(), taskInstanceId);
+			   logRest( isLog, "completeValue: Get variable["+varName+"] is a ACTIVITYDATA: ["+dataListInstance.getValue()+"]");
+			   result.put(dataListInstance.getName(), dataListInstance.getValue());
+			   return;
+		   }
+	   } catch (DataNotFoundException dnte) {};
+   
+     	// Business data ?
+   		try	
+		{
+			logger.info("completeValue.1: Try getProcessDataReference["+varName+"]");
+			
+			BusinessDataReference businessData = businessDataAPI.getProcessBusinessDataReference( varName, processInstanceId);
+			if (businessData==null)
+			{
+				logger.info("completeValue: not a BusinessDataReference ["+varName+"]");
+			}
+			else
+			{
+				// logger.info("completeValue.2: Get Business Reference ["+businessData.getName()+"]");
+				
+				// the result is maybe a HASHMAP or a LIST<HASMAP>
+				Object resultBdm = null;
+				boolean isMultiple=false;
+				List<Long> listStorageIds = new ArrayList<Long>();
+				if (businessData instanceof MultipleBusinessDataReference)
+				{
+					// this is a multiple data
+					resultBdm = new ArrayList<HashMap<String,Object>>();
+					isMultiple=true;
+					logger.info("completeValue.3 Get MULTIPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
+					listStorageIds.addAll( ((MultipleBusinessDataReference) businessData).getStorageIds());
+				}
+				if (businessData instanceof SimpleBusinessDataReference)
+				{
+					resultBdm = new HashMap<String,Object>();
+					isMultiple=false;
+					logger.info("completeValue.3: Get SIMPLE Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"]");
+					listStorageIds.addAll( ((SimpleBusinessDataReference) businessData).getStorageId());
+				}
+				// logger.info("completeValue.3bis : Set ["+resultBdm+"] in result");
+				
+				result.put( businessData.getName(), resultBdm);
+				
+				String classDAOName = businessData.getType()+"DAO";
+				// logger.info("completeValue.4: Get Business Reference ["+businessData.getName()+"] it's a BDM-type["+businessData.getType()+"] classDao=["+classDAOName+"]");
+				
+				Class classDao = Class.forName( classDAOName );
+				if (classDao==null)
+				{
+					// a problem here...
+					logger.info("completeValue.5:>>>>>>>>>>>>>>>>>>>>  DaoClass ["+classDAOName+"] not Found");
+					return;
+				}
+				// logger.info("completeValue.5:classDao Loaded ["+classDao.getName()+"]");
+				
+				
+				BusinessObjectDAO dao;
+			
+				dao = apiClient.getDAO( classDao );
+				
+				// logger.info("completeValue.6:Dao loaded : dao["+ dao +"]");
+				
+				// now, check each BDM
+				for (Long storageId : listStorageIds)
+				{
+					HashMap saveOneBdm = null;
+					if (isMultiple)
+					{
+						saveOneBdm = new HashMap<String,Object>();
+						resultBdm.add( saveOneBdm );
+					}
+					else
+						saveOneBdm = resultBdm;
+					
+					// logger.info("completeValue.7: Get Business Reference ["+businessData.getName()+"] : type["+businessData.getType()+"] storageId["+storageId+"]");
+	
+					Entity dataBdmEntity = dao.findByPersistenceId(storageId);
+					if (dataBdmEntity==null)
+					{
+						logger.error("The BDM variable["+businessData.getName()+"] storageId["+storageId+"] does not exist anymore ");
+						return;
+					}
+					logger.info("completeValue.8: Got the BdmEntity");
+					
+					
+					Class classBdmEntity= dataBdmEntity.getClass();
+					logger.info("completeValue.9: got the class["+classBdmEntity.getName()+"]");
+					
+					// Start the recursive 
+					loadBdmVariableOneLevel(saveOneBdm, dataBdmEntity, classBdmEntity.getName(), contextDataMap, isLog );
+
+					
+				}
+			}
+			// def dao = context.apiClient.getDAO(MyDao.class)
+			// def data= dao.findByPersistenceId(ref.storageId)
+		} catch (Exception e) {
+			logger.info("Error during get Business Data Information: "+e.toString());
+		
+		};
+	
+		return;
+   }
+   
+   
+   
+   // load recursively the BDM Variable
+   /*
+    * Variable is 
+    * 
+    * saveOneBdmObject : 
+    * 
+    */
+   private void loadBdmVariableOneLevel(   Map<String,Object> saveLocalLevel,
+	   									   Entity dataBdmEntity,
+										   String prefix, 
+										   Map<String,Object> contextLocalLevel,
+										   boolean isLog)
+   {
+      Class classBdmEntity= dataBdmEntity.getClass();
+	   
+	   Method[] listMethods= classBdmEntity.getMethods();
+	   
+	   //	logger.info("Field= "+listFields+" Methods="+listMethods);
+	   for (Method method : listMethods)
+	   {
+		   try
+		   {
+			   logger.info("completeValue.10.a method["+method.getName()+"]");
+			   
+			   if (method.getName().startsWith("get") && method.getParameterTypes().length == 0
+				   && ! "getClass".equals(method.getName())
+				   && ! "getPersistenceVersion".equals(method.getName())
+				   && ! "getHandler".equals(method.getName()) )
+			   {
+				   // call it !
+				   // logger.info("method=["+method.getName()+"]");
+				   
+				   Object value = method.invoke(dataBdmEntity, new Object[0]);
+				   logger.info("completeValue.10b method["+method.getName()+"] Result=["+value+"]");
+				   String nameAttribute = method.getName();
+				   
+				   nameAttribute= nameAttribute.substring(3); // getInvoice => Invoice
+				   nameAttribute = nameAttribute.substring(0,1).toLowerCase()+nameAttribute.substring(1);
+				   
+				   saveLocalLevel.put(nameAttribute, value);
+				   logger.info("completeValue.10c saveOneBdm ="+saveOneBdm.toString());
+				   
+			   }
+		   }
+		   catch( Exception e)
+		   {
+			   logger.severe("Error during exploring the Bdm variable ["+dataBdmEntity.getClass().getName()+"] : "+e.toString() );
+		   }
+	   }
+	   
+   }
+   
+   private void logRest( boolean isLog, String logExplanation)
+   {
+	   if (isLog)
+	   	logger.info("com.bonitasoft.rest.context: "+logExplanation);
+   }
+
+
+}

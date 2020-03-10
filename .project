@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>RestApiContext 7.2.4</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.jdt.core.javabuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.bonitasoft.studio.rest.api.extension.pagePropertyBuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.m2e.core.maven2Builder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.eclipse.jdt.groovy.core.groovyNature</nature>
+		<nature>org.eclipse.m2e.core.maven2Nature</nature>
+		<nature>org.bonitasoft.studio.common.RestAPIExtensionNature</nature>
+		<nature>org.eclipse.jdt.core.javanature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>DocumentPermission 7.2.4/DocumentPermissionContextRule.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/DocumentPermissionContextRule.groovy</locationURI>
+		</link>
+		<link>
+			<name>DocumentPermission 7.2.4/RestContextCaseId.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/RestContextCaseId.groovy</locationURI>
+		</link>
+		<link>
+			<name>DocumentPermission 7.2.4/RestContextCheckDocumentDownload.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/RestContextCheckDocumentDownload.groovy</locationURI>
+		</link>
+		<link>
+			<name>DocumentPermission 7.2.4/RestContextConfiguration.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/RestContextConfiguration.groovy</locationURI>
+		</link>
+		<link>
+			<name>DocumentPermission 7.2.4/RestContextPilot.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/RestContextPilot.groovy</locationURI>
+		</link>
+		<link>
+			<name>DocumentPermission 7.2.4/RestContextTrackPerformance.groovy</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/bonita_home/engine-server/work/tenants/1/security-scripts/RestContextTrackPerformance.groovy</locationURI>
+		</link>
+	</linkedResources>
+</projectDescription>

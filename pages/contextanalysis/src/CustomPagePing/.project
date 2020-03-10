@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>CustomPagePing</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.jdt.core.javabuilder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.m2e.core.maven2Builder</name>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.eclipse.jdt.core.javanature</nature>
+		<nature>org.eclipse.m2e.core.maven2Nature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>custompage/7.2.0 AITraining/Index.groovy</name>
+			<type>1</type>
+			<location>C:/atelier/BPM-SP-7.2.0/workspace/AI Training/bonita_home/client/tenants/1/work/pages/custompage_ping/Index.groovy</location>
+		</link>
+		<link>
+			<name>custompage/7.2.0 AITraining/index.html</name>
+			<type>1</type>
+			<location>C:/atelier/BPM-SP-7.2.0/workspace/AI Training/bonita_home/client/tenants/1/work/pages/custompage_ping/index.html</location>
+		</link>
+		<link>
+			<name>custompage/7.2.0 AITraining/pingmonitor.js</name>
+			<type>1</type>
+			<location>C:/atelier/BPM-SP-7.2.0/workspace/AI Training/bonita_home/client/tenants/1/work/pages/custompage_ping/resources/pingmonitor.js</location>
+		</link>
+	</linkedResources>
+</projectDescription>

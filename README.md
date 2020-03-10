@@ -46,6 +46,7 @@ Example on the returned JSON:
 * Date
 A date is returned in the JSON format to be used on the browser
 	
+
 Example on the returned JSON: 
     "dateOfRegistration": "2016-05-23T14:24:16.683Z"
 
@@ -58,7 +59,7 @@ The Java class Map is managed, and return a JSON set of data
 		"zipcode" : 94702
 		"validfrom" : "2016-05-23T14:24:16.683Z"
 		}
-		
+	
 * List of object (list of String, list of Integer...)	
 The list is a JSON list, each content can be whatever is manage as a value (String, Integer, Date, Bdm...)
 
@@ -106,7 +107,7 @@ Example on the returned JSON:
         "headerNumber": 0,
         "name": "TheDatatype Name"
     }
-	
+
 * Business Data Model
 The business Data Model (Multiple or not) are displayed, and are recursively exploited (list of line of an invoice for example). if you BDM has some aggregation (the Invoice reference a Customer), then the information on the customer can be returned : you have to use the Pilot for that.
 
@@ -146,17 +147,24 @@ So, you can use
 
 -------------------------------- How to pilot the result? --------------------------------
 
-To pilot which variable has to be retrieved and return, you can define a local variable "context", or a process variable "globalcontext" which contains some JSON information.
- For example, set as localvariable "context" the following information:
- { "isMyInvoiceIsReady":"data",
- "dateInvoice":"data",
- "personWhoOrderMap":"data",
- "invoiceNumber":"data",
- "listOfProducts":"data",
- "completeValueAsLong":"data",
- "shortDescString":"data",
- "thisIsALocalVariable":"data",
- "completeAddressDataType":"datatype" }
+To pilot which variable has to be retrieved and return, you can define 
+
+- a local variable "context", 
+- or a process variable "globalcontext" 
+- or a parameter "paramcontext" 
+
+
+This variable contains a JSON information.
+For example, set as localvariable "context" the following information:
+   { "isMyInvoiceIsReady":"data",
+   "dateInvoice":"data",
+   "personWhoOrderMap":"data",
+   "invoiceNumber":"data",
+   "listOfProducts":"data",
+   "completeValueAsLong":"data",
+   "shortDescString":"data",
+   "thisIsALocalVariable":"data",
+   "completeAddressDataType":"datatype" }
 
 then you get as a result :
  { "isMyInvoiceIsReady ":true,
@@ -171,10 +179,10 @@ then you get as a result :
  [ {"product":"BPAD","lineNumber":"100"},
  {"product":"AI","lineNumber":"200"}
  ] },
- 
- 
+
+
  -------------------------------- access the BDM--------------------------------
- 
+
  When you have a BDM variable like "summerOrder", ask in the pilot:
  "summerOrder" : {
  "name": "data",
@@ -211,30 +219,31 @@ All the REST API activityVariable/ and caseVariable are based on the permission 
  Doing that, the REST API will deliver only what it's define in the local variable. And because the variable is on the server, user has no way to change it.
 
  -------------------------------- Tutorial --------------------------------
- 
+
  To demonstrate the usage, install the RestApiContext (see the Installation part).
  * load the BOS file "DemontrasteRestApiContext", 
  * access the Business Data Model (Development / Business Data Model / Manage) and click on Finish to deploy the data model
- 
+
 Use ContextCall:
   Select the Context Call process, and click on Run to deploy it
   Click on Start to create a case.
   On the portal, you should see three different tasks: ContextUse, allContext,GlobalContext. Click on the task ContextUse and look the URL:
   http://localhost:8080/bonita/portal/homepage#?_p=tasklistinguser&_pf=1&_f=available&_id=100003
 the taskId is under "id" : is this URL, taskId is 100003. To get the caseId, on the portal, the id is visible after the "Case: xxxx" (example : 5004)
-  
+
   Run a Firefox Browser. Connect as Walter.Bates.
-  
+
   BY A REST CLIENT
   On Firefox, run the Rest Client Extension (a Rest Client module on Firefox). The browser shares the cookie, so now your rest client is connected
-   
+
    * * *  Set the REST URL :
 	Method : POST
 	URL : http://localhost:8080/bonita/API/extension/context?caseId=5004
-   Click on SEND, result is 
+      Click on SEND, result is 
 	Status : 200
 	Response Body:
 	{
+
     "aBoolean": true,
     "globalcontext": "{ \"*\":\"all\" }",
     "aHashMap": {
@@ -300,7 +309,7 @@ the taskId is under "id" : is this URL, taskId is 100003. To get the caseId, on 
 		"CROCODILE",
 		"TURTLE",
 		"FROGGY"
-	],	
+			],	
     "aDataType": {
         "lines": [
             {
@@ -327,6 +336,7 @@ the taskId is under "id" : is this URL, taskId is 100003. To get the caseId, on 
    BY THE UIDESIGNER
 	click on the different task, and then the REST API is called and get the information. Access the task definition with the UIDesigner to see how to use it.
   
+
 ----------- List of update
 
  2.0 Access :
@@ -385,15 +395,15 @@ To set the URL in the RestAPi Context, do the following:
         "isProcessInstanciation": true,
         "isProcessOverview": false,
         "isAdministrator": true,
- 
+
  ------------------------------ Document
  In the instantiation form, when a document exist, return it empty. This information is needed for the FileUploadWidgetPlus
- 
+
  ------------------------------ Parameters
  If requested (context required all like '*') then the process parameters are returned with the value.
  Else, return can be done only when requested
 
- 
+
     DateTime is now new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ")
 
 
