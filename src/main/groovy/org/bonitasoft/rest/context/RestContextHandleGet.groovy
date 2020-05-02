@@ -55,7 +55,7 @@ class RestContextHandleGet implements RestApiController {
     private static Logger logger = Logger.getLogger(RestContextHandleGet.class.getName());
 
 
-
+	private static String CST_VERSION="2.13.1";
 
 
     /* -------------------------------------------------------------------------------- */
@@ -106,7 +106,7 @@ class RestContextHandleGet implements RestApiController {
             sourceContextData+= pilot.getAnalysisString();
 			sourceContextData += "BEGINPILOT="+(pilot.getPilotDataMap()==null ? null : pilot.getPilotDataMap().toString())+" ENDPILOT";
 
-            contextCaseId.log( "=================== Start GetContext RESTAPI 2.13");
+            contextCaseId.log( "=================== Start GetContext RESTAPI "+CST_VERSION);
             boolean canContinue=true;
 
 
@@ -139,7 +139,7 @@ class RestContextHandleGet implements RestApiController {
 
             String version = request.getParameter("version");
             if (version!=null)
-                contextResult.put("version", "2.7");
+                contextResult.put("version", CST_VERSION);
 
 
             // ------------------ retrieve correct information
@@ -796,6 +796,7 @@ class RestContextHandleGet implements RestApiController {
     	}
     	catch(Exception e)
     	{    		
+			analysis+="Exception "+e.toString();			
     		final StringWriter sw = new StringWriter();
             e.printStackTrace(new PrintWriter(sw));
             final String exceptionDetails = sw.toString();

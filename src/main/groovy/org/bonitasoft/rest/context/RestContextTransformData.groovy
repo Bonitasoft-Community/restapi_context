@@ -91,7 +91,8 @@ public class RestContextTransformData {
                     else
                     {
 						Object valuePilot = pilotAction.get( key );
-                        boolean isAllowed = valuePilot==null ? false : contextCaseId.getPilot().checkPermissionString( key, valuePilot.toString() );
+						// if it is null, give it to the permission, it will deal it.
+                        boolean isAllowed = contextCaseId.getPilot().checkPermissionString( key, valuePilot==null ? null : valuePilot.toString() );
                         trace +="-pilotAction["+valuePilot+"];IsAllow ? "+isAllowed;
                         if (isAllowed)
                         {
@@ -139,7 +140,7 @@ public class RestContextTransformData {
             trace +="; pilotAction["+(pilotAction==null ? null : pilotAction.toString())+"]";
 
             // the pilotAction is maybe a Permission string
-            boolean isAllowed = pilotAction==null? false : contextCaseId.getPilot().checkPermissionString(varName, pilotAction.toString());
+            boolean isAllowed = contextCaseId.getPilot().checkPermissionString(varName, pilotAction==null ? null : pilotAction.toString());
             trace +=";IsAllow ? "+isAllowed;
             if (isAllowed)
             {
