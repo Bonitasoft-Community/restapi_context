@@ -455,7 +455,7 @@ class RestContextHandleGet implements RestApiController {
                     for (ArchivedDataInstance data : listDataInstance)
                     {
                         contextCaseId.log( "ArchivedDataInstance detected ["+data.getName()+"] contentType["+data.getContainerType()+"]");
-                        if (! "PROCESS_INSTANCE".equals( data.getContainerType() ))
+                        if ( "PROCESS_INSTANCE".equals( data.getContainerType() ))
                             completeValueProcessVariable( rootResult, data.getName(), varAction, contextCaseId, apiClient, contextCaseId.getPilot().getPilotDataMap(), trackPerformance  );
                     }
                     trackPerformance.addMarker("getAllArchivedProcessData");
