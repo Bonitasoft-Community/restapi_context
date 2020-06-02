@@ -3,23 +3,23 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.bonitasoft.rest.context</groupId>
     <artifactId>ContextAccess</artifactId>
-    <version>2.10</version>
+    <version>2.13.2</version>
     
     <name>ResourceName REST API</name>
     <description>REST API to manage resourceName</description>
     
     <properties>
-        <bonita.version>7.2.2</bonita.version>
-        <groovy.version>2.4.3-01</groovy.version>
+        <bonita.version>7.10.0</bonita.version>
+        <groovy.version>2.4.16-02</groovy.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencies>
      <dependency>
-     	<groupId>com.bonitasoft.log.event</groupId>
-  		<artifactId>bonita-event</artifactId>
-  		<version>1.0.0</version>  		
-     </dependency>
+			<groupId>org.bonitasoft.log.event</groupId>
+			<artifactId>bonita-event</artifactId>
+			<version>1.8.0</version>
+		</dependency>
   
   	<!-- for the Explicit function, this JAVA component is necessary. --> 
   	<!-- The RESTAPI Context does not allow to set directly a librairy, only maven can be use.  -->
@@ -28,7 +28,7 @@
   	<!--  2. get the project, and "cd src/main/java" and "maven install"-->
   	<!--  3. get the JAVA lib in the release and then run: -->
   	<!--     mvn install:install-file -Dfile=RestContextComponentJava-2.9.jar -DgroupId=org.bonitasoft.rest.context -DartifactId=RestContextComponentJava -Dversion=2.9 -Dpackaging=jar -->
-   
+     
 
         <dependency>
             <groupId>org.bonitasoft.web</groupId>
@@ -39,7 +39,7 @@
         <dependency>
             <groupId>org.codehaus.groovy</groupId>
             <artifactId>groovy-all</artifactId>
-            <version>2.4.4</version>
+            <version>2.4.16</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
@@ -81,7 +81,23 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
+<!-- ******************** Community Maven repository **************** -->
+	<repositories>
+		<repository>
+			<releases>
+				<enabled>true</enabled>
+				<checksumPolicy>warn</checksumPolicy>
+			</releases>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
+			<id>logPageBonita</id>
+			<name>logPageBonita</name>
+			<url>https://raw.githubusercontent.com/Bonitasoft-Community/bonitamavenrepository/master</url>
+			<layout>default</layout>
+		</repository>
+	</repositories>
+	
     <build>
         <finalName>${project.artifactId}</finalName>
         <resources>
@@ -97,7 +113,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.3</version>
+                <version>3.8.0</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -107,7 +123,7 @@
                     <dependency>
                         <groupId>org.codehaus.groovy</groupId>
                         <artifactId>groovy-eclipse-compiler</artifactId>
-                        <version>2.9.2-01</version>
+                        <version>3.3.0-01</version>
                     </dependency>
                     <dependency>
                         <groupId>org.codehaus.groovy</groupId>
