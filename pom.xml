@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.bonitasoft.rest.context</groupId>
     <artifactId>ContextAccess</artifactId>
-    <version>2.13.2</version>
+    <version>2.13.3</version>
     
     <name>ResourceName REST API</name>
     <description>REST API to manage resourceName</description>
